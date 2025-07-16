@@ -9,6 +9,7 @@ Office.onReady((info) => {
   if (info.host === Office.HostType.Excel) {
     document.getElementById("sideload-msg").style.display = "none";
     document.getElementById("app-body").style.display = "flex";
+    document.getElementById("format-spreadsheet").onclick = formatSpreadsheet;
     document.getElementById("add-charge-column").onclick = addChargeColumn;
     document.getElementById("color-code-rows").onclick = colorCodeRows;
 
@@ -20,6 +21,103 @@ Office.onReady((info) => {
     };
   }
 });
+
+export async function formatSpreadsheet() {
+  try {
+    await Excel.run(async (context) => {
+      // Get the active worksheet
+      const worksheet = context.workbook.worksheets.getActiveWorksheet();
+
+      // Get the used range
+      const usedRange = worksheet.getUsedRange();
+      usedRange.load(["rowCount", "columnCount"]);
+
+      await context.sync();
+
+      if (!usedRange) {
+        showMessage("No data found in the worksheet to format.", "error");
+        return;
+      }
+
+      // Format headers (first row)
+      const headerRow = usedRange.getRow(0);
+      headerRow.format.font.bold = true;
+      headerRow.format.fill.color = "#4472C4";
+      headerRow.format.font.color = "white";
+      headerRow.format.horizontalAlignment = "Center";
+
+      // Add borders to entire used range
+      usedRange.format.borders.getItem("EdgeTop").style = "Continuous";
+      usedRange.format.borders.getItem("EdgeBottom").style = "Continuous";
+      usedRange.format.borders.getItem("EdgeLeft").style = "Continuous";
+      usedRange.format.borders.getItem("EdgeRight").style = "Continuous";
+      usedRange.format.borders.getItem("InsideHorizontal").style = "Continuous";
+      usedRange.format.borders.getItem("InsideVertical").style = "Continuous";
+
+      // Set border color to a nice gray
+      usedRange.format.borders.getItem("EdgeTop").color = "#D1D5DB";
+      usedRange.format.borders.getItem("EdgeBottom").color = "#D1D5DB";
+      usedRange.format.borders.getItem("EdgeLeft").color = "#D1D5DB";
+      usedRange.format.borders.getItem("EdgeRight").color = "#D1D5DB";
+      usedRange.format.borders.getItem("InsideHorizontal").color = "#D1D5DB";
+      usedRange.format.borders.getItem("InsideVertical").color = "#D1D5DB";
+
+      // Auto-fit columns first
+      const columns = usedRange.getEntireColumn();
+      columns.format.autofitColumns();
+
+      await context.sync();
+
+      // Set maximum width and enable text wrapping for columns that exceed it
+      const maxColumnWidth = 300; // Maximum width in points
+
+      // Load all column widths at once to avoid sync in loop
+      const columnWidths = [];
+      for (let col = 0; col < usedRange.columnCount; col++) {
+        const column = usedRange.getColumn(col);
+        column.load("format/columnWidth");
+        columnWidths.push(column);
+      }
+
+      await context.sync();
+
+      // Now process columns that exceed max width
+      for (let col = 0; col < columnWidths.length; col++) {
+        const column = columnWidths[col];
+        if (column.format.columnWidth > maxColumnWidth) {
+          column.format.columnWidth = maxColumnWidth;
+          column.format.wrapText = true;
+
+          // Adjust row height to accommodate wrapped text
+          const dataRows = usedRange
+            .getOffsetRange(1, 0)
+            .getResizedRange(usedRange.rowCount - 1, 0);
+          dataRows.format.rowHeight = 30; // Minimum row height for wrapped text
+        }
+      }
+
+      // Alternate row colors for better readability (skip header row)
+      for (let row = 1; row < usedRange.rowCount; row++) {
+        const dataRow = usedRange.getRow(row);
+        if (row % 2 === 0) {
+          dataRow.format.fill.color = "#F8F9FA"; // Light gray for even rows
+        } else {
+          dataRow.format.fill.color = "#FFFFFF"; // White for odd rows
+        }
+      }
+
+      await context.sync();
+
+      showMessage(
+        "Spreadsheet formatted successfully with proper column widths, borders, and styling.",
+        "success"
+      );
+    });
+  } catch (error) {
+    console.error(error);
+    showMessage("An error occurred while formatting: " + error.message, "error");
+  }
+}
 
 export async function addChargeColumn() {
   try {
