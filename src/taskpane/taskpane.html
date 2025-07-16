@@ -59,6 +59,25 @@
                         </select>
                     </div>
                     
+                    <div style="margin-top: 10px;">
+                        <input type="checkbox" id="prepopulate-charge" class="ms-Checkbox-input">
+                        <label for="prepopulate-charge" class="ms-Label">Prepopulate based on Narrative/Description column</label>
+                    </div>
+                    
+                    <div id="prepopulate-rules" style="display: none; margin-top: 10px; padding: 10px; background-color: #f5f5f5;">
+                        <p class="ms-font-s"><strong>Prepopulation Rules:</strong></p>
+                        <div style="margin-top: 5px;">
+                            <label class="ms-Label ms-font-s">Keywords for 'N' (No Charge) - comma separated:</label>
+                            <input id="no-charge-keywords" type="text" class="ms-TextField-field" placeholder="NC, DO NOT CHARGE, Non Chargeable" value="NC, DO NOT CHARGE, Non Chargeable">
+                        </div>
+                        <p class="ms-font-xs" style="margin-top: 10px;">
+                            <strong>Logic:</strong><br>
+                            • If text contains any No Charge keyword → 'N' (No)<br>
+                            • Otherwise → 'Y' (Yes)<br>
+                            • Empty cells → 'Q' (Query)
+                        </p>
+                    </div>
+                    
                     <div role="button" id="add-charge-column" class="ms-Button ms-Button--primary" style="margin-top: 20px;">
                         <span class="ms-Button-label">Add Charge Column</span>
                     </div>

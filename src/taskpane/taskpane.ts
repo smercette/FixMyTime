@@ -3,7 +3,7 @@
  * See LICENSE in the project root for license information.
  */
 
-/* global console, document, Excel, Office, HTMLInputElement, HTMLSelectElement, setTimeout */
+/* global console, document, Excel, Office, HTMLInputElement, HTMLSelectElement, setTimeout, HTMLInputElement */
 
 Office.onReady((info) => {
   if (info.host === Office.HostType.Excel) {
@@ -11,6 +11,13 @@ Office.onReady((info) => {
     document.getElementById("app-body").style.display = "flex";
     document.getElementById("add-charge-column").onclick = addChargeColumn;
     document.getElementById("color-code-rows").onclick = colorCodeRows;
+
+    // Toggle prepopulation rules visibility
+    const prepopulateCheckbox = document.getElementById("prepopulate-charge") as HTMLInputElement;
+    prepopulateCheckbox.onchange = () => {
+      const rulesDiv = document.getElementById("prepopulate-rules");
+      rulesDiv.style.display = prepopulateCheckbox.checked ? "block" : "none";
+    };
   }
 });
 
@@ -25,6 +32,8 @@ export async function addChargeColumn() {
         (document.getElementById("column-header") as HTMLInputElement).value || "Charge";
       const columnPosition = (document.getElementById("column-position") as HTMLSelectElement)
         .value;
+      const shouldPrepopulate = (document.getElementById("prepopulate-charge") as HTMLInputElement)
+        .checked;
 
       // Get the used range to find the data
       const usedRange = worksheet.getUsedRange();
@@ -68,12 +77,31 @@ export async function addChargeColumn() {
         },
       };
 
-      // Set default values to "Q" (Query)
-      const defaultValues = [];
-      for (let i = 0; i < usedRange.rowCount - 1; i++) {
-        defaultValues.push(["Q"]);
+      // Set values based on prepopulation setting
+      let values = [];
+      if (shouldPrepopulate) {
+        // Find narrative/description column
+        const narrativeColumnIndex = findNarrativeColumn(usedRange.values[0]);
+
+        if (narrativeColumnIndex !== -1) {
+          values = prepopulateChargeValues(usedRange.values, narrativeColumnIndex);
+        } else {
+          // Default to Q if no narrative column found
+          for (let i = 0; i < usedRange.rowCount - 1; i++) {
+            values.push(["Q"]);
+          }
+          showMessage(
+            "No Narrative/Description column found. Defaulting to 'Q' values.",
+            "warning"
+          );
+        }
+      } else {
+        // Default to "Q" (Query) when not prepopulating
+        for (let i = 0; i < usedRange.rowCount - 1; i++) {
+          values.push(["Q"]);
+        }
       }
-      dataRange.values = defaultValues;
+      dataRange.values = values;
 
       // Format the data cells
       dataRange.format.horizontalAlignment = "Center";
@@ -104,6 +132,51 @@ function getColumnLetter(columnNumber: number): string {
   return columnLetter;
 }
 
+function findNarrativeColumn(headerRow: any[]): number {
+  const narrativeKeywords = ["narrative", "description", "desc", "notes", "comment", "details"];
+
+  for (let i = 0; i < headerRow.length; i++) {
+    if (headerRow[i]) {
+      const headerText = headerRow[i].toString().toLowerCase();
+      if (narrativeKeywords.some((keyword) => headerText.includes(keyword))) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
+function prepopulateChargeValues(allValues: any[][], narrativeColumnIndex: number): string[][] {
+  const noChargeKeywords = (document.getElementById("no-charge-keywords") as HTMLInputElement).value
+    .toLowerCase()
+    .split(",")
+    .map((k) => k.trim())
+    .filter((k) => k.length > 0);
+
+  const values: string[][] = [];
+
+  // Skip header row (start from index 1)
+  for (let row = 1; row < allValues.length; row++) {
+    const narrativeText = allValues[row][narrativeColumnIndex]?.toString().toLowerCase() || "";
+
+    let chargeValue = "Y"; // Default to Yes (chargeable)
+
+    // If narrative text is empty or only whitespace, mark as Query
+    if (narrativeText.trim() === "") {
+      chargeValue = "Q";
+    }
+    // Check for no-charge keywords
+    else if (noChargeKeywords.some((keyword) => narrativeText.includes(keyword))) {
+      chargeValue = "N";
+    }
+    // Otherwise, default to Y (chargeable)
+
+    values.push([chargeValue]);
+  }
+
+  return values;
+}
+
 function showMessage(message: string, type: string) {
   const messageDiv = document.getElementById("message");
   const messageText = document.getElementById("message-text");
@@ -114,6 +187,8 @@ function showMessage(message: string, type: string) {
   // Style based on type
   if (type === "error") {
     messageDiv.className = "ms-MessageBar ms-MessageBar--error";
+  } else if (type === "warning") {
+    messageDiv.className = "ms-MessageBar ms-MessageBar--warning";
   } else {
     messageDiv.className = "ms-MessageBar ms-MessageBar--success";
   }
