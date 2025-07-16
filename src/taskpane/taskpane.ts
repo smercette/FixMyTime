@@ -19,6 +19,15 @@ Office.onReady((info) => {
       const rulesDiv = document.getElementById("prepopulate-rules");
       rulesDiv.style.display = prepopulateCheckbox.checked ? "block" : "none";
     };
+
+    // Toggle format options visibility
+    const formatOptionsCheckbox = document.getElementById(
+      "show-format-options"
+    ) as HTMLInputElement;
+    formatOptionsCheckbox.onchange = () => {
+      const optionsDiv = document.getElementById("format-options");
+      optionsDiv.style.display = formatOptionsCheckbox.checked ? "block" : "none";
+    };
   }
 });
 
@@ -39,37 +48,47 @@ export async function formatSpreadsheet() {
         return;
       }
 
+      // Get user configuration values
+      const headerBgColor = (document.getElementById("header-bg-color") as HTMLInputElement).value;
+      const headerTextColor = (document.getElementById("header-text-color") as HTMLInputElement)
+        .value;
+      const altRowColor1 = (document.getElementById("alt-row-color1") as HTMLInputElement).value;
+      const altRowColor2 = (document.getElementById("alt-row-color2") as HTMLInputElement).value;
+      const borderColor = (document.getElementById("border-color") as HTMLInputElement).value;
+      const maxColumnWidth = parseInt(
+        (document.getElementById("max-column-width") as HTMLInputElement).value,
+        10
+      );
+      const enableAlternatingRows = (
+        document.getElementById("enable-alternating-rows") as HTMLInputElement
+      ).checked;
+
       // Format headers (first row)
       const headerRow = usedRange.getRow(0);
       headerRow.format.font.bold = true;
-      headerRow.format.fill.color = "#4472C4";
-      headerRow.format.font.color = "white";
+      headerRow.format.fill.color = headerBgColor;
+      headerRow.format.font.color = headerTextColor;
       headerRow.format.horizontalAlignment = "Center";
 
       // Add borders to entire used range
-      usedRange.format.borders.getItem("EdgeTop").style = "Continuous";
-      usedRange.format.borders.getItem("EdgeBottom").style = "Continuous";
-      usedRange.format.borders.getItem("EdgeLeft").style = "Continuous";
-      usedRange.format.borders.getItem("EdgeRight").style = "Continuous";
-      usedRange.format.borders.getItem("InsideHorizontal").style = "Continuous";
-      usedRange.format.borders.getItem("InsideVertical").style = "Continuous";
-
-      // Set border color to a nice gray
-      usedRange.format.borders.getItem("EdgeTop").color = "#D1D5DB";
-      usedRange.format.borders.getItem("EdgeBottom").color = "#D1D5DB";
-      usedRange.format.borders.getItem("EdgeLeft").color = "#D1D5DB";
-      usedRange.format.borders.getItem("EdgeRight").color = "#D1D5DB";
-      usedRange.format.borders.getItem("InsideHorizontal").color = "#D1D5DB";
-      usedRange.format.borders.getItem("InsideVertical").color = "#D1D5DB";
+      const borderItems = [
+        "EdgeTop",
+        "EdgeBottom",
+        "EdgeLeft",
+        "EdgeRight",
+        "InsideHorizontal",
+        "InsideVertical",
+      ];
+      borderItems.forEach((item) => {
+        usedRange.format.borders.getItem(item).style = "Continuous";
+        usedRange.format.borders.getItem(item).color = borderColor;
+      });
 
       // Auto-fit columns first
       const columns = usedRange.getEntireColumn();
       columns.format.autofitColumns();
 
       await context.sync();
-
-      // Set maximum width and enable text wrapping for columns that exceed it
-      const maxColumnWidth = 300; // Maximum width in points
 
       // Load all column widths at once to avoid sync in loop
       const columnWidths = [];
@@ -96,20 +115,22 @@ export async function formatSpreadsheet() {
         }
       }
 
-      // Alternate row colors for better readability (skip header row)
-      for (let row = 1; row < usedRange.rowCount; row++) {
-        const dataRow = usedRange.getRow(row);
-        if (row % 2 === 0) {
-          dataRow.format.fill.color = "#F8F9FA"; // Light gray for even rows
-        } else {
-          dataRow.format.fill.color = "#FFFFFF"; // White for odd rows
+      // Apply alternating row colors if enabled (skip header row)
+      if (enableAlternatingRows) {
+        for (let row = 1; row < usedRange.rowCount; row++) {
+          const dataRow = usedRange.getRow(row);
+          if (row % 2 === 0) {
+            dataRow.format.fill.color = altRowColor2; // Even rows
+          } else {
+            dataRow.format.fill.color = altRowColor1; // Odd rows
+          }
         }
       }
 
       await context.sync();
 
       showMessage(
-        "Spreadsheet formatted successfully with proper column widths, borders, and styling.",
+        "Spreadsheet formatted successfully with your custom styling options.",
         "success"
       );
     });

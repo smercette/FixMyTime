@@ -35,7 +35,53 @@
             <div class="ms-Grid-row">
                 <div class="ms-Grid-col ms-sm12">
                     <h3 class="ms-font-l">Format Spreadsheet</h3>
-                    <p class="ms-font-m">Apply professional formatting to your worksheet with proper column widths, bold headers, and borders.</p>
+                    <p class="ms-font-m">Apply professional formatting to your worksheet with customizable styling options.</p>
+                    
+                    <div style="margin-top: 10px;">
+                        <input type="checkbox" id="show-format-options" class="ms-Checkbox-input">
+                        <label for="show-format-options" class="ms-Label">Show formatting options</label>
+                    </div>
+                    
+                    <div id="format-options" style="display: none; margin-top: 10px; padding: 10px; background-color: #f5f5f5;">
+                        <div class="ms-Grid">
+                            <div class="ms-Grid-row">
+                                <div class="ms-Grid-col ms-sm6">
+                                    <label class="ms-Label ms-font-s">Header Background Color:</label>
+                                    <input id="header-bg-color" type="color" value="#4472C4" style="width: 100%; height: 30px; margin-top: 5px;">
+                                </div>
+                                <div class="ms-Grid-col ms-sm6">
+                                    <label class="ms-Label ms-font-s">Header Text Color:</label>
+                                    <input id="header-text-color" type="color" value="#FFFFFF" style="width: 100%; height: 30px; margin-top: 5px;">
+                                </div>
+                            </div>
+                            <div class="ms-Grid-row" style="margin-top: 10px;">
+                                <div class="ms-Grid-col ms-sm6">
+                                    <label class="ms-Label ms-font-s">Alternating Row Color 1:</label>
+                                    <input id="alt-row-color1" type="color" value="#FFFFFF" style="width: 100%; height: 30px; margin-top: 5px;">
+                                </div>
+                                <div class="ms-Grid-col ms-sm6">
+                                    <label class="ms-Label ms-font-s">Alternating Row Color 2:</label>
+                                    <input id="alt-row-color2" type="color" value="#F8F9FA" style="width: 100%; height: 30px; margin-top: 5px;">
+                                </div>
+                            </div>
+                            <div class="ms-Grid-row" style="margin-top: 10px;">
+                                <div class="ms-Grid-col ms-sm6">
+                                    <label class="ms-Label ms-font-s">Border Color:</label>
+                                    <input id="border-color" type="color" value="#D1D5DB" style="width: 100%; height: 30px; margin-top: 5px;">
+                                </div>
+                                <div class="ms-Grid-col ms-sm6">
+                                    <label class="ms-Label ms-font-s">Max Column Width (pts):</label>
+                                    <input id="max-column-width" type="number" value="300" min="100" max="1000" style="width: 100%; height: 30px; margin-top: 5px;">
+                                </div>
+                            </div>
+                            <div class="ms-Grid-row" style="margin-top: 10px;">
+                                <div class="ms-Grid-col ms-sm12">
+                                    <input type="checkbox" id="enable-alternating-rows" class="ms-Checkbox-input" checked>
+                                    <label for="enable-alternating-rows" class="ms-Label ms-font-s">Enable alternating row colors</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     
                     <div role="button" id="format-spreadsheet" class="ms-Button ms-Button--primary" style="margin-top: 10px;">
                         <span class="ms-Button-label">Format Spreadsheet</span>
