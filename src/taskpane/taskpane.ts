@@ -196,12 +196,26 @@ export async function addChargeColumn() {
         targetColumn = worksheet.getRange(`${columnLetter}:${columnLetter}`);
       }
 
-      // Set the header in the first row
+      // Get current matter settings for formatting
+      const headerBgColor = (document.getElementById("header-bg-color") as HTMLInputElement).value;
+      const headerTextColor = (document.getElementById("header-text-color") as HTMLInputElement)
+        .value;
+      const borderColor = (document.getElementById("border-color") as HTMLInputElement).value;
+
+      // Set the header in the first row with matter settings
       const headerCell = worksheet.getRange(`${columnLetter}1`);
       headerCell.values = [[columnHeader]];
       headerCell.format.font.bold = true;
-      headerCell.format.fill.color = "#4472C4";
-      headerCell.format.font.color = "white";
+      headerCell.format.fill.color = headerBgColor;
+      headerCell.format.font.color = headerTextColor;
+      headerCell.format.horizontalAlignment = "Center";
+
+      // Apply borders to header cell
+      const headerBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
+      headerBorderItems.forEach((item) => {
+        headerCell.format.borders.getItem(item).style = "Continuous";
+        headerCell.format.borders.getItem(item).color = borderColor;
+      });
 
       // Add data validation for the charge column (from row 2 onwards)
       const dataRange = worksheet.getRange(`${columnLetter}2:${columnLetter}${usedRange.rowCount}`);
@@ -213,6 +227,13 @@ export async function addChargeColumn() {
           source: "Y,N,Q",
         },
       };
+
+      // Apply borders to data cells
+      const dataBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
+      dataBorderItems.forEach((item) => {
+        dataRange.format.borders.getItem(item).style = "Continuous";
+        dataRange.format.borders.getItem(item).color = borderColor;
+      });
 
       // Set values based on prepopulation setting
       let values = [];
@@ -242,6 +263,25 @@ export async function addChargeColumn() {
 
       // Format the data cells
       dataRange.format.horizontalAlignment = "Center";
+
+      // Apply alternating row colors if enabled
+      const enableAlternatingRows = (
+        document.getElementById("enable-alternating-rows") as HTMLInputElement
+      ).checked;
+      if (enableAlternatingRows) {
+        const altRowColor1 = (document.getElementById("alt-row-color1") as HTMLInputElement).value;
+        const altRowColor2 = (document.getElementById("alt-row-color2") as HTMLInputElement).value;
+
+        // Apply alternating colors to each row in the charge column
+        for (let row = 2; row <= usedRange.rowCount; row++) {
+          const cell = worksheet.getRange(`${columnLetter}${row}`);
+          if (row % 2 === 0) {
+            cell.format.fill.color = altRowColor2; // Even rows
+          } else {
+            cell.format.fill.color = altRowColor1; // Odd rows
+          }
+        }
+      }
 
       // Auto-fit the column width
       targetColumn.format.autofitColumns();
