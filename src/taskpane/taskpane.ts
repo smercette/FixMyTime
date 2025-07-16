@@ -17,6 +17,7 @@ Office.onReady((info) => {
     document.getElementById("save-matter").onclick = saveMatterProfile;
     document.getElementById("load-matter").onclick = loadMatterProfile;
     document.getElementById("delete-matter").onclick = deleteMatterProfile;
+    document.getElementById("save-current-settings").onclick = saveCurrentSettings;
 
     // Toggle prepopulation rules visibility
     const prepopulateCheckbox = document.getElementById("prepopulate-charge") as HTMLInputElement;
@@ -533,5 +534,34 @@ function deleteMatterProfile() {
     showMessage(`Matter profile "${selectedMatter}" deleted successfully.`, "success");
   } else {
     showMessage("Matter profile not found.", "error");
+  }
+}
+
+function saveCurrentSettings() {
+  const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+
+  if (!selectedMatter) {
+    showMessage(
+      "Please select a matter from the dropdown to update, or create a new one in the Matter Profile Management section.",
+      "error"
+    );
+    return;
+  }
+
+  const currentSettings = getCurrentSettings();
+  currentSettings.name = selectedMatter;
+
+  const profiles = getMatterProfiles();
+  const existingIndex = profiles.findIndex((p) => p.name === selectedMatter);
+
+  if (existingIndex >= 0) {
+    profiles[existingIndex] = currentSettings;
+    saveMatterProfiles(profiles);
+    showMessage(
+      `Matter profile "${selectedMatter}" updated successfully with current settings.`,
+      "success"
+    );
+  } else {
+    showMessage("Selected matter profile not found. Please create a new profile first.", "error");
   }
 }
