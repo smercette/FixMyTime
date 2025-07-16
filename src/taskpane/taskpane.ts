@@ -3,7 +3,7 @@
  * See LICENSE in the project root for license information.
  */
 
-/* global console, document, Excel, Office, HTMLInputElement, HTMLSelectElement, setTimeout, HTMLInputElement */
+/* global console, document, Excel, Office, HTMLInputElement, HTMLSelectElement, setTimeout, localStorage */
 
 Office.onReady((info) => {
   if (info.host === Office.HostType.Excel) {
@@ -13,6 +13,11 @@ Office.onReady((info) => {
     document.getElementById("add-charge-column").onclick = addChargeColumn;
     document.getElementById("color-code-rows").onclick = colorCodeRows;
 
+    // Matter profile functionality
+    document.getElementById("save-matter").onclick = saveMatterProfile;
+    document.getElementById("load-matter").onclick = loadMatterProfile;
+    document.getElementById("delete-matter").onclick = deleteMatterProfile;
+
     // Toggle prepopulation rules visibility
     const prepopulateCheckbox = document.getElementById("prepopulate-charge") as HTMLInputElement;
     prepopulateCheckbox.onchange = () => {
@@ -20,14 +25,26 @@ Office.onReady((info) => {
       rulesDiv.style.display = prepopulateCheckbox.checked ? "block" : "none";
     };
 
-    // Toggle format options visibility
-    const formatOptionsCheckbox = document.getElementById(
-      "show-format-options"
-    ) as HTMLInputElement;
-    formatOptionsCheckbox.onchange = () => {
-      const optionsDiv = document.getElementById("format-options");
-      optionsDiv.style.display = formatOptionsCheckbox.checked ? "block" : "none";
-    };
+    // Load saved matter profiles on startup
+    loadMatterProfiles();
+
+    // Tab switching functionality
+    const tabButtons = document.querySelectorAll(".tab-button");
+    const tabContents = document.querySelectorAll(".tab-content");
+
+    tabButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const targetTab = button.getAttribute("data-tab");
+
+        // Remove active class from all buttons and contents
+        tabButtons.forEach((btn) => btn.classList.remove("active"));
+        tabContents.forEach((content) => content.classList.remove("active"));
+
+        // Add active class to clicked button and corresponding content
+        button.classList.add("active");
+        document.getElementById(`${targetTab}-tab`).classList.add("active");
+      });
+    });
   }
 });
 
@@ -376,5 +393,145 @@ export async function colorCodeRows() {
   } catch (error) {
     console.error(error);
     showMessage("An error occurred: " + error.message, "error");
+  }
+}
+
+// Matter Profile Management
+interface MatterProfile {
+  name: string;
+  headerBgColor: string;
+  headerTextColor: string;
+  altRowColor1: string;
+  altRowColor2: string;
+  borderColor: string;
+  maxColumnWidth: number;
+  enableAlternatingRows: boolean;
+  noChargeKeywords: string;
+}
+
+function getCurrentSettings(): MatterProfile {
+  return {
+    name: "",
+    headerBgColor: (document.getElementById("header-bg-color") as HTMLInputElement).value,
+    headerTextColor: (document.getElementById("header-text-color") as HTMLInputElement).value,
+    altRowColor1: (document.getElementById("alt-row-color1") as HTMLInputElement).value,
+    altRowColor2: (document.getElementById("alt-row-color2") as HTMLInputElement).value,
+    borderColor: (document.getElementById("border-color") as HTMLInputElement).value,
+    maxColumnWidth: parseInt(
+      (document.getElementById("max-column-width") as HTMLInputElement).value,
+      10
+    ),
+    enableAlternatingRows: (document.getElementById("enable-alternating-rows") as HTMLInputElement)
+      .checked,
+    noChargeKeywords: (document.getElementById("no-charge-keywords") as HTMLInputElement).value,
+  };
+}
+
+function applySettings(profile: MatterProfile) {
+  (document.getElementById("header-bg-color") as HTMLInputElement).value = profile.headerBgColor;
+  (document.getElementById("header-text-color") as HTMLInputElement).value =
+    profile.headerTextColor;
+  (document.getElementById("alt-row-color1") as HTMLInputElement).value = profile.altRowColor1;
+  (document.getElementById("alt-row-color2") as HTMLInputElement).value = profile.altRowColor2;
+  (document.getElementById("border-color") as HTMLInputElement).value = profile.borderColor;
+  (document.getElementById("max-column-width") as HTMLInputElement).value =
+    profile.maxColumnWidth.toString();
+  (document.getElementById("enable-alternating-rows") as HTMLInputElement).checked =
+    profile.enableAlternatingRows;
+  (document.getElementById("no-charge-keywords") as HTMLInputElement).value =
+    profile.noChargeKeywords;
+}
+
+function loadMatterProfiles() {
+  const profiles = getMatterProfiles();
+  const selectElement = document.getElementById("matter-select") as HTMLSelectElement;
+
+  // Clear existing options except the first one
+  selectElement.innerHTML = '<option value="">-- Select a Matter --</option>';
+
+  // Add saved profiles
+  profiles.forEach((profile) => {
+    const option = document.createElement("option");
+    option.value = profile.name;
+    option.textContent = profile.name;
+    selectElement.appendChild(option);
+  });
+}
+
+function getMatterProfiles(): MatterProfile[] {
+  const stored = localStorage.getItem("fixmytime-matter-profiles");
+  return stored ? JSON.parse(stored) : [];
+}
+
+function saveMatterProfiles(profiles: MatterProfile[]) {
+  localStorage.setItem("fixmytime-matter-profiles", JSON.stringify(profiles));
+}
+
+function saveMatterProfile() {
+  const matterName = (document.getElementById("new-matter-name") as HTMLInputElement).value.trim();
+
+  if (!matterName) {
+    showMessage("Please enter a matter name.", "error");
+    return;
+  }
+
+  const currentSettings = getCurrentSettings();
+  currentSettings.name = matterName;
+
+  const profiles = getMatterProfiles();
+  const existingIndex = profiles.findIndex((p) => p.name === matterName);
+
+  if (existingIndex >= 0) {
+    profiles[existingIndex] = currentSettings;
+    showMessage(`Matter profile "${matterName}" updated successfully.`, "success");
+  } else {
+    profiles.push(currentSettings);
+    showMessage(`Matter profile "${matterName}" saved successfully.`, "success");
+  }
+
+  saveMatterProfiles(profiles);
+  loadMatterProfiles();
+
+  // Clear the input and select the saved matter
+  (document.getElementById("new-matter-name") as HTMLInputElement).value = "";
+  (document.getElementById("matter-select") as HTMLSelectElement).value = matterName;
+}
+
+function loadMatterProfile() {
+  const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+
+  if (!selectedMatter) {
+    showMessage("Please select a matter to load.", "error");
+    return;
+  }
+
+  const profiles = getMatterProfiles();
+  const profile = profiles.find((p) => p.name === selectedMatter);
+
+  if (profile) {
+    applySettings(profile);
+    showMessage(`Matter profile "${selectedMatter}" loaded successfully.`, "success");
+  } else {
+    showMessage("Matter profile not found.", "error");
+  }
+}
+
+function deleteMatterProfile() {
+  const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+
+  if (!selectedMatter) {
+    showMessage("Please select a matter to delete.", "error");
+    return;
+  }
+
+  const profiles = getMatterProfiles();
+  const filteredProfiles = profiles.filter((p) => p.name !== selectedMatter);
+
+  if (filteredProfiles.length < profiles.length) {
+    saveMatterProfiles(filteredProfiles);
+    loadMatterProfiles();
+    showMessage(`Matter profile "${selectedMatter}" deleted successfully.`, "success");
+  } else {
+    showMessage("Matter profile not found.", "error");
   }
 }
