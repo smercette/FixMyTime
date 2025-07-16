@@ -8,7 +8,7 @@
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Contoso Task Pane Add-in</title>
+    <title>FixMyTime - Time Entry Management</title>
 
     <!-- Office JavaScript API -->
     <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
@@ -23,32 +23,54 @@
 <body class="ms-font-m ms-welcome ms-Fabric">
     <header class="ms-welcome__header ms-bgColor-neutralLighter">
         <img width="90" height="90" src="../../assets/logo-filled.png" alt="Contoso" title="Contoso" />
-        <h1 class="ms-font-su">Welcome</h1>
+        <h1 class="ms-font-su">FixMyTime</h1>
     </header>
     <section id="sideload-msg" class="ms-welcome__main">
         <h2 class="ms-font-xl">Please <a target="_blank" href="https://learn.microsoft.com/office/dev/add-ins/testing/test-debug-office-add-ins#sideload-an-office-add-in-for-testing">sideload</a> your add-in to see app body.</h2>
     </section>
     <main id="app-body" class="ms-welcome__main" style="display: none;">
-        <h2 class="ms-font-xl"> Discover what Office Add-ins can do for you today! </h2>
-        <ul class="ms-List ms-welcome__features">
-            <li class="ms-ListItem">
-                <i class="ms-Icon ms-Icon--Ribbon ms-font-xl"></i>
-                <span class="ms-font-m">Achieve more with Office integration</span>
-            </li>
-            <li class="ms-ListItem">
-                <i class="ms-Icon ms-Icon--Unlock ms-font-xl"></i>
-                <span class="ms-font-m">Unlock features and functionality</span>
-            </li>
-            <li class="ms-ListItem">
-                <i class="ms-Icon ms-Icon--Design ms-font-xl"></i>
-                <span class="ms-font-m">Create and visualize like a pro</span>
-            </li>
-        </ul>
-        <p class="ms-font-l">Modify the source files, then click <b>Run</b>.</p>
-        <div role="button" id="run" class="ms-welcome__action ms-Button ms-Button--hero ms-font-xl">
-            <span class="ms-Button-label">Run</span>
+        <h2 class="ms-font-xl">FixMyTime - Time Entry Management</h2>
+        
+        <div class="ms-Grid" dir="ltr">
+            <div class="ms-Grid-row">
+                <div class="ms-Grid-col ms-sm12">
+                    <h3 class="ms-font-l">Add Charge Column</h3>
+                    <p class="ms-font-m">Add a 'Charge' column to your worksheet with options for Y (Yes), N (No), or Q (Query).</p>
+                    
+                    <div class="ms-TextField">
+                        <label class="ms-Label">Column Header (default: "Charge")</label>
+                        <input id="column-header" type="text" class="ms-TextField-field" placeholder="Charge" value="Charge">
+                    </div>
+                    
+                    <div style="margin-top: 10px;">
+                        <label class="ms-Label">Insert at column:</label>
+                        <select id="column-position" class="ms-Dropdown" style="width: 100%; padding: 5px;">
+                            <option value="next">Next available column</option>
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="D">D</option>
+                            <option value="E">E</option>
+                            <option value="F">F</option>
+                            <option value="G">G</option>
+                            <option value="H">H</option>
+                            <option value="I">I</option>
+                            <option value="J">J</option>
+                        </select>
+                    </div>
+                    
+                    <div role="button" id="add-charge-column" class="ms-Button ms-Button--primary" style="margin-top: 20px;">
+                        <span class="ms-Button-label">Add Charge Column</span>
+                    </div>
+                    
+                    <div id="message" class="ms-MessageBar" style="display: none; margin-top: 20px;">
+                        <div class="ms-MessageBar-content">
+                            <div class="ms-MessageBar-text" id="message-text"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <p><label id="item-subject"></label></p>
     </main>
 </body>
 

@@ -77,4 +77,7 @@ No test framework is currently configured. Consider adding Jest or Mocha for uni
 ## Development Workflow
 
 ### Repository Management
+- GitHub repository: https://github.com/smercette/FixMyTime
 - Keep Claude.md file updated as we go (ie, at every commit)
+- Created with comprehensive .gitignore for Node.js/TypeScript projects
+- Uses gh CLI for GitHub operations
