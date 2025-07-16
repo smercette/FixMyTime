@@ -10,6 +10,7 @@ Office.onReady((info) => {
     document.getElementById("sideload-msg").style.display = "none";
     document.getElementById("app-body").style.display = "flex";
     document.getElementById("add-charge-column").onclick = addChargeColumn;
+    document.getElementById("color-code-rows").onclick = colorCodeRows;
   }
 });
 
@@ -121,4 +122,65 @@ function showMessage(message: string, type: string) {
   setTimeout(() => {
     messageDiv.style.display = "none";
   }, 5000);
+}
+
+export async function colorCodeRows() {
+  try {
+    await Excel.run(async (context) => {
+      // Get the active worksheet
+      const worksheet = context.workbook.worksheets.getActiveWorksheet();
+
+      // Get the used range
+      const usedRange = worksheet.getUsedRange();
+      usedRange.load(["rowCount", "columnCount", "values"]);
+
+      await context.sync();
+
+      if (!usedRange) {
+        showMessage("No data found in the worksheet.", "error");
+        return;
+      }
+
+      // Find the Charge column
+      const headerRow = usedRange.values[0];
+      let chargeColumnIndex = -1;
+
+      for (let i = 0; i < headerRow.length; i++) {
+        if (headerRow[i] && headerRow[i].toString().toLowerCase().includes("charge")) {
+          chargeColumnIndex = i;
+          break;
+        }
+      }
+
+      if (chargeColumnIndex === -1) {
+        showMessage("No 'Charge' column found. Please add a Charge column first.", "error");
+        return;
+      }
+
+      // Apply color coding to each row based on the charge value
+      const values = usedRange.values;
+      for (let row = 1; row < usedRange.rowCount; row++) {
+        const chargeValue = values[row][chargeColumnIndex];
+        const rowRange = usedRange.getRow(row);
+
+        if (chargeValue === "Y") {
+          // Pale green for Yes
+          rowRange.format.fill.color = "#D4EDDA";
+        } else if (chargeValue === "N") {
+          // Pale red for No
+          rowRange.format.fill.color = "#F8D7DA";
+        } else if (chargeValue === "Q") {
+          // Pale amber/yellow for Query
+          rowRange.format.fill.color = "#FFF3CD";
+        }
+      }
+
+      await context.sync();
+
+      showMessage("Successfully applied color coding to rows based on Charge values.", "success");
+    });
+  } catch (error) {
+    console.error(error);
+    showMessage("An error occurred: " + error.message, "error");
+  }
 }
