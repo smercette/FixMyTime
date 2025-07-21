@@ -1,458 +1,778 @@
 <!-- Copyright (c) Microsoft Corporation. All rights reserved. Licensed under the MIT License. -->
 <!-- This file shows how to design a first-run page that provides a welcome screen to the user about the features of the add-in. -->
 
-<!DOCTYPE html>
+<!doctype html>
 <html>
-
-<head>
+  <head>
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>FixMyTime - Time Entry Management</title>
 
     <!-- Office JavaScript API -->
-    <script type="text/javascript" src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    <script
+      type="text/javascript"
+      src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"
+    ></script>
 
     <!-- For more information on Fluent UI, visit https://developer.microsoft.com/fluentui#/. -->
-    <link rel="stylesheet" href="https://res-1.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css"/>
+    <link
+      rel="stylesheet"
+      href="https://res-1.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css"
+    />
 
     <!-- Template styles -->
     <link href="taskpane.css" rel="stylesheet" type="text/css" />
-</head>
+  </head>
 
-<body class="ms-font-m ms-welcome ms-Fabric">
+  <body class="ms-font-m ms-welcome ms-Fabric">
     <header class="ms-welcome__header ms-bgColor-neutralLighter">
-        <img width="90" height="90" src="../../assets/logo-filled.png?v=2" alt="FixMyTime" title="FixMyTime" />
-        <h1 class="ms-font-su">FixMyTime</h1>
+      <img
+        width="90"
+        height="90"
+        src="../../assets/logo-filled.png?v=2"
+        alt="FixMyTime"
+        title="FixMyTime"
+      />
+      <h1 class="ms-font-su">FixMyTime</h1>
     </header>
     <section id="sideload-msg" class="ms-welcome__main">
-        <h2 class="ms-font-xl">Please <a target="_blank" href="https://learn.microsoft.com/office/dev/add-ins/testing/test-debug-office-add-ins#sideload-an-office-add-in-for-testing">sideload</a> your add-in to see app body.</h2>
+      <h2 class="ms-font-xl">
+        Please
+        <a
+          target="_blank"
+          href="https://learn.microsoft.com/office/dev/add-ins/testing/test-debug-office-add-ins#sideload-an-office-add-in-for-testing"
+          >sideload</a
+        >
+        your add-in to see app body.
+      </h2>
     </section>
-    <main id="app-body" class="ms-welcome__main" style="display: none;">
-        <h2 class="ms-font-xl">FixMyTime - Time Entry Management</h2>
-        
-        <!-- Tab Navigation -->
-        <div class="tab-navigation">
-            <button class="tab-button active" data-tab="main">Main</button>
-            <button class="tab-button" data-tab="settings">Settings</button>
-        </div>
-        
-        <div class="ms-Grid" dir="ltr">
-            <div class="ms-Grid-row">
-                <div class="ms-Grid-col ms-sm12">
-                    <!-- Main Tab Content -->
-                    <div id="main-tab" class="tab-content active">
-                        <!-- Current Matter Display -->
-                        <div id="current-matter-display" style="display: none; margin-bottom: 20px; padding: 15px; background-color: #f0f0f0; border-radius: 5px;">
-                            <h3 class="ms-font-l" style="margin: 0 0 5px 0;">Current Matter</h3>
-                            <p class="ms-font-m" id="current-matter-name" style="margin: 0; font-weight: 600; color: #0078d4;"></p>
-                        </div>
-                        
-                        
-                        <h3 class="ms-font-l">Quick Actions</h3>
-                        <p class="ms-font-m">Perform common tasks on your worksheet.</p>
-                        
-                        <div style="margin-top: 15px;">
-                            <div role="button" id="format-spreadsheet" class="ms-Button ms-Button--primary" style="width: 100%; margin-bottom: 10px;">
-                                <span class="ms-Button-label">Format Spreadsheet</span>
-                            </div>
-                            
-                            <div role="button" id="add-columns" class="ms-Button ms-Button--primary" style="width: 100%; margin-bottom: 10px;">
-                                <span class="ms-Button-label">Add Columns</span>
-                            </div>
-                            
-                            <div role="button" id="color-code-rows" class="ms-Button ms-Button--primary" style="width: 100%; margin-bottom: 10px;">
-                                <span class="ms-Button-label">Color Code Rows</span>
-                            </div>
-                            
-                            <div role="button" id="apply-all-rules" class="ms-Button ms-Button--primary" style="width: 100%; margin-bottom: 10px; background-color: #6b46c1; border-color: #6b46c1;">
-                                <span class="ms-Button-label">Apply Rules</span>
-                            </div>
-                            
-                            <div role="button" id="undo-name-rules" class="ms-Button" style="width: 100%; margin-bottom: 10px;" disabled>
-                                <span class="ms-Button-label">Undo Last Application</span>
-                            </div>
-                        </div>
-                        
-                        <div id="message" class="ms-MessageBar" style="display: none; margin-top: 20px;">
-                            <div class="ms-MessageBar-content">
-                                <div class="ms-MessageBar-text" id="message-text"></div>
-                            </div>
-                        </div>
-                        
-                        <!-- Matter Selection at Bottom -->
-                        <div id="matter-selection-bottom" style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e1e1e1;">
-                            <div class="ms-Grid">
-                                <div class="ms-Grid-row">
-                                    <div class="ms-Grid-col ms-sm12">
-                                        <label class="ms-Label ms-font-s">Matter Profile:</label>
-                                        <select id="matter-select" class="ms-Dropdown" style="width: 100%; padding: 8px;">
-                                            <option value="">-- Select a Matter --</option>
-                                            <option value="__new__" style="font-style: italic;">+ Add New Matter</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+    <main id="app-body" class="ms-welcome__main" style="display: none">
+      <h2 class="ms-font-xl">FixMyTime - Time Entry Management</h2>
+
+      <!-- Tab Navigation -->
+      <div class="tab-navigation">
+        <button class="tab-button active" data-tab="main">Main</button>
+        <button class="tab-button" data-tab="settings">Settings</button>
+      </div>
+
+      <div class="ms-Grid" dir="ltr">
+        <div class="ms-Grid-row">
+          <div class="ms-Grid-col ms-sm12">
+            <!-- Main Tab Content -->
+            <div id="main-tab" class="tab-content active">
+              <!-- Matter Selection -->
+              <div
+                style="
+                  margin-bottom: 20px;
+                  padding: 15px;
+                  background-color: #f8f9fa;
+                  border-radius: 5px;
+                  border: 1px solid #e1e1e1;
+                "
+              >
+                <div class="ms-Grid">
+                  <div class="ms-Grid-row">
+                    <div class="ms-Grid-col ms-sm12">
+                      <label class="ms-Label ms-font-s" style="font-weight: 600"
+                        >Matter Profile:</label
+                      >
+                      <select
+                        id="matter-select"
+                        class="ms-Dropdown"
+                        style="width: 100%; padding: 8px; margin-top: 5px"
+                      >
+                        <option value="">-- Select a Matter --</option>
+                        <option value="__new__" style="font-style: italic">+ Add New Matter</option>
+                      </select>
                     </div>
-                    
-                    <!-- Settings Tab Content -->
-                    <div id="settings-tab" class="tab-content">
-                        <!-- New Matter Creation Section (hidden by default) -->
-                        <div id="new-matter-section" style="display: none; margin-bottom: 30px; padding: 20px; background-color: #f5f5f5; border-radius: 5px;">
-                            <h3 class="ms-font-l">Create New Matter</h3>
-                            <p class="ms-font-m">Enter a name for your new matter profile.</p>
-                            
-                            <div class="ms-Grid" style="margin-top: 15px;">
-                                <div class="ms-Grid-row">
-                                    <div class="ms-Grid-col ms-sm8">
-                                        <label class="ms-Label">Matter Name:</label>
-                                        <input id="new-matter-name" type="text" class="ms-TextField-field" placeholder="Enter matter name">
-                                    </div>
-                                    <div class="ms-Grid-col ms-sm4">
-                                        <label class="ms-Label" style="visibility: hidden;">Action</label>
-                                        <div role="button" id="save-matter" class="ms-Button ms-Button--primary" style="width: 100%;">
-                                            <span class="ms-Button-label">Save</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Formatting Dropdown Section -->
-                        <div class="dropdown-section">
-                            <div class="dropdown-header" data-target="formatting-content">
-                                <h3 class="ms-font-l">Formatting</h3>
-                                <span class="dropdown-arrow">▼</span>
-                            </div>
-                            <div id="formatting-content" class="dropdown-content">
-                                <p class="ms-font-m">Customize colors and styling for your worksheets.</p>
-                                
-                                <div style="margin-top: 15px;">
-                                    <div class="ms-Grid">
-                                        <div class="ms-Grid-row">
-                                            <div class="ms-Grid-col ms-sm6">
-                                                <label class="ms-Label ms-font-s">Header Background Color:</label>
-                                                <input id="header-bg-color" type="color" value="#4472C4" style="width: 100%; height: 35px; margin-top: 5px;">
-                                            </div>
-                                            <div class="ms-Grid-col ms-sm6">
-                                                <label class="ms-Label ms-font-s">Header Text Color:</label>
-                                                <input id="header-text-color" type="color" value="#FFFFFF" style="width: 100%; height: 35px; margin-top: 5px;">
-                                            </div>
-                                        </div>
-                                        <div class="ms-Grid-row" style="margin-top: 15px;">
-                                            <div class="ms-Grid-col ms-sm6">
-                                                <label class="ms-Label ms-font-s">Alternating Row Color 1:</label>
-                                                <input id="alt-row-color1" type="color" value="#FFFFFF" style="width: 100%; height: 35px; margin-top: 5px;">
-                                            </div>
-                                            <div class="ms-Grid-col ms-sm6">
-                                                <label class="ms-Label ms-font-s">Alternating Row Color 2:</label>
-                                                <input id="alt-row-color2" type="color" value="#F8F9FA" style="width: 100%; height: 35px; margin-top: 5px;">
-                                            </div>
-                                        </div>
-                                        <div class="ms-Grid-row" style="margin-top: 15px;">
-                                            <div class="ms-Grid-col ms-sm6">
-                                                <label class="ms-Label ms-font-s">Border Color:</label>
-                                                <input id="border-color" type="color" value="#D1D5DB" style="width: 100%; height: 35px; margin-top: 5px;">
-                                            </div>
-                                            <div class="ms-Grid-col ms-sm6">
-                                                <label class="ms-Label ms-font-s">Max Column Width (pts):</label>
-                                                <input id="max-column-width" type="number" value="300" min="100" max="1000" style="width: 100%; height: 35px; margin-top: 5px;">
-                                            </div>
-                                        </div>
-                                        <div class="ms-Grid-row" style="margin-top: 15px;">
-                                            <div class="ms-Grid-col ms-sm6">
-                                                <label class="ms-Label ms-font-s">Vertical Alignment:</label>
-                                                <select id="vertical-alignment" class="ms-Dropdown" style="width: 100%; padding: 8px; margin-top: 5px;">
-                                                    <option value="top">Top</option>
-                                                    <option value="center" selected>Middle</option>
-                                                    <option value="bottom">Bottom</option>
-                                                </select>
-                                            </div>
-                                            <div class="ms-Grid-col ms-sm6">
-                                                <input type="checkbox" id="enable-alternating-rows" class="ms-Checkbox-input" checked style="margin-top: 25px;">
-                                                <label for="enable-alternating-rows" class="ms-Label ms-font-s">Enable alternating row colors</label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <hr style="margin: 30px 0;">
-                                
-                                <h3 class="ms-font-l">Charge Column Settings</h3>
-                                <p class="ms-font-m">Configure how the charge column behaves.</p>
-                                
-                                <div style="margin-top: 15px;">
-                                    <div class="ms-TextField">
-                                        <label class="ms-Label">Column Header (default: "Charge")</label>
-                                        <input id="column-header" type="text" class="ms-TextField-field" placeholder="Charge" value="Charge">
-                                    </div>
-                                    
-                                    <div style="margin-top: 15px;">
-                                        <label class="ms-Label">Insert at column:</label>
-                                        <select id="column-position" class="ms-Dropdown" style="width: 100%; padding: 8px;">
-                                            <option value="next">Next available column</option>
-                                            <option value="A">A</option>
-                                            <option value="B">B</option>
-                                            <option value="C">C</option>
-                                            <option value="D">D</option>
-                                            <option value="E">E</option>
-                                            <option value="F">F</option>
-                                            <option value="G">G</option>
-                                            <option value="H">H</option>
-                                            <option value="I">I</option>
-                                            <option value="J">J</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div style="margin-top: 15px;">
-                                        <input type="checkbox" id="prepopulate-charge" class="ms-Checkbox-input">
-                                        <label for="prepopulate-charge" class="ms-Label">Prepopulate based on Narrative/Description column</label>
-                                    </div>
-                                    
-                                    <div id="prepopulate-rules" style="display: none; margin-top: 15px; padding: 15px; background-color: #f5f5f5;">
-                                        <p class="ms-font-s"><strong>Prepopulation Rules:</strong></p>
-                                        <div style="margin-top: 10px;">
-                                            <label class="ms-Label ms-font-s">Keywords for 'N' (No Charge) - comma separated:</label>
-                                            <input id="no-charge-keywords" type="text" class="ms-TextField-field" placeholder="NC, DO NOT CHARGE, Non Chargeable" value="NC, DO NOT CHARGE, Non Chargeable">
-                                        </div>
-                                        <p class="ms-font-xs" style="margin-top: 15px;">
-                                            <strong>Logic:</strong><br>
-                                            • If text starts with any No Charge keyword → 'N' (No)<br>
-                                            • Otherwise → 'Y' (Yes)<br>
-                                            • Empty cells → 'Q' (Query)
-                                        </p>
-                                    </div>
-                                </div>
-                                
-                                <hr style="margin: 30px 0;">
-                                
-                                <h3 class="ms-font-l">Column Options</h3>
-                                <p class="ms-font-m">Configure which columns to add when using "Add Columns" on the Main tab.</p>
-                                
-                                <div style="margin-top: 15px;">
-                                    <div style="margin-bottom: 15px;">
-                                        <input type="checkbox" id="add-amended-narrative" class="ms-Checkbox-input">
-                                        <label for="add-amended-narrative" class="ms-Label">Add Amended Narrative Column</label>
-                                        <p class="ms-font-xs" style="margin-top: 5px; color: #666; margin-left: 20px;">
-                                            Renames existing Narrative to "Original Narrative" and adds "Amended Narrative" to its right.
-                                        </p>
-                                    </div>
-                                    
-                                    <div style="margin-bottom: 15px;">
-                                        <input type="checkbox" id="add-amended-time" class="ms-Checkbox-input">
-                                        <label for="add-amended-time" class="ms-Label">Add Amended Time Column</label>
-                                        <p class="ms-font-xs" style="margin-top: 5px; color: #666; margin-left: 20px;">
-                                            Renames existing Time to "Original Time" and adds "Amended Time" to its right.
-                                        </p>
-                                    </div>
-                                    
-                                    <div style="margin-bottom: 15px;">
-                                        <input type="checkbox" id="add-notes-column" class="ms-Checkbox-input">
-                                        <label for="add-notes-column" class="ms-Label">Add Notes Column</label>
-                                        <p class="ms-font-xs" style="margin-top: 5px; color: #666; margin-left: 20px;">
-                                            Adds a Notes column at the far right to track which rules have been applied to each row. <strong>Note:</strong> This column is automatically added when Name Standardisation rule is enabled.
-                                        </p>
-                                    </div>
-                                </div>
-                                
-                                <hr style="margin: 30px 0;">
-                                
-                                <div style="text-align: center;">
-                                    <div role="button" id="save-current-settings" class="ms-Button ms-Button--primary" style="width: 100%; font-size: 16px; font-weight: 600;">
-                                        <span class="ms-Button-label">Save Current Settings</span>
-                                    </div>
-                                    <p class="ms-font-xs" style="margin-top: 8px; color: #666;">
-                                        Updates the selected matter profile with current settings.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Participants Dropdown Section -->
-                        <div class="dropdown-section">
-                            <div class="dropdown-header" data-target="participants-content">
-                                <h3 class="ms-font-l">Participants</h3>
-                                <span class="dropdown-arrow">▼</span>
-                            </div>
-                            <div id="participants-content" class="dropdown-content" style="display: none;">
-                                <!-- Fee Earners Section -->
-                                <h4 class="ms-font-l">Fee Earners</h4>
-                                <p class="ms-font-m">Manage fee earner information and billing contacts.</p>
-                                <div id="duplicate-names-info" style="display: none; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 10px; margin-bottom: 15px;">
-                                    <p class="ms-font-s" style="margin: 0; color: #6c5700;"><strong>⚠️ Duplicate Names Detected:</strong> Rows highlighted in yellow have duplicate first names. Use the "Use as Default" checkbox to specify which entry should be used for name standardisation rules.</p>
-                                </div>
-                                
-                                <div style="margin: 15px 0;">
-                                    <div role="button" id="update-from-spreadsheet" class="ms-Button ms-Button--primary" style="margin-bottom: 15px;">
-                                        <span class="ms-Button-label">Update for current spreadsheet</span>
-                                    </div>
-                                    <p class="ms-font-xs" style="color: #666; margin-bottom: 15px;">
-                                        Scans the current spreadsheet and updates the fee earner list based on Name, Role, and Rate columns.
-                                    </p>
-                                </div>
-
-                                <!-- Fee Earners Table -->
-                                <div class="fee-earners-container">
-                                    <table id="fee-earners-table" class="participants-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Name</th>
-                                                <th>Role</th>
-                                                <th>Rate</th>
-                                                <th>Email</th>
-                                                <th>Use as Default</th>
-                                                <th>Billing Contact</th>
-                                                <th>Billing Contact Name</th>
-                                                <th>Billing Contact Email</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="fee-earners-tbody">
-                                            <!-- Dynamic rows will be inserted here -->
-                                        </tbody>
-                                    </table>
-                                    
-                                    <div style="margin-top: 10px;">
-                                        <div role="button" id="add-fee-earner" class="ms-Button" style="width: auto;">
-                                            <span class="ms-Button-label">+ Add Fee Earner</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div style="text-align: center; margin-top: 20px;">
-                                    <div role="button" id="save-participants" class="ms-Button ms-Button--primary" style="font-size: 16px; font-weight: 600;">
-                                        <span class="ms-Button-label">Save Participants</span>
-                                    </div>
-                                    <p class="ms-font-xs" style="margin-top: 8px; color: #666;">
-                                        Saves fee earner information to the current matter profile.
-                                    </p>
-                                </div>
-
-                                <hr style="margin: 30px 0;">
-
-                                <!-- Other Participants Section -->
-                                <h4 class="ms-font-l">Other Participants</h4>
-                                <p class="ms-font-m">Additional participant management options will be available here.</p>
-                                <p class="ms-font-s" style="color: #666; font-style: italic;">Coming soon...</p>
-                            </div>
-                        </div>
-                        
-                        <!-- Rules Dropdown Section -->
-                        <div class="dropdown-section">
-                            <div class="dropdown-header" data-target="rules-content">
-                                <h3 class="ms-font-l">Rules</h3>
-                                <span class="dropdown-arrow">▼</span>
-                            </div>
-                            <div id="rules-content" class="dropdown-content" style="display: none;">
-                                <p class="ms-font-m">Configure automated data processing rules.</p>
-                                
-                                <!-- Name Standardisation Rule Section -->
-                                <div class="dropdown-section">
-                                    <div class="dropdown-header" data-target="name-standardisation-content">
-                                        <div style="display: flex; align-items: center; gap: 8px;">
-                                            <input type="checkbox" id="name-standardisation-enabled" class="ms-Checkbox-input">
-                                            <h3 class="ms-font-l" style="margin: 0;">Name Standardisation</h3>
-                                        </div>
-                                        <span class="dropdown-arrow">▼</span>
-                                    </div>
-                                    <div id="name-standardisation-content" class="dropdown-content" style="display: none;">
-                                        <p class="ms-font-m">Automatically replace first names in narratives with full names from Fee Earners list.</p>
-                                        
-                                        <div style="margin-top: 15px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
-                                            <div class="ms-Grid">
-                                                <div class="ms-Grid-row">
-                                                    <div class="ms-Grid-col ms-sm6">
-                                                        <input type="checkbox" id="partial-matches" class="ms-Checkbox-input" checked>
-                                                        <label for="partial-matches" class="ms-Label ms-font-s">Allow partial matches (Johnny → John)</label>
-                                                    </div>
-                                                    <div class="ms-Grid-col ms-sm6">
-                                                        <input type="checkbox" id="date-matching" class="ms-Checkbox-input" checked>
-                                                        <label for="date-matching" class="ms-Label ms-font-s">Use date-based selection (±5 days)</label>
-                                                    </div>
-                                                </div>
-                                                <div class="ms-Grid-row" style="margin-top: 10px;">
-                                                    <div class="ms-Grid-col ms-sm6">
-                                                        <input type="checkbox" id="first-occurrence-only" class="ms-Checkbox-input" checked>
-                                                        <label for="first-occurrence-only" class="ms-Label ms-font-s">Replace only first occurrence</label>
-                                                    </div>
-                                                    <div class="ms-Grid-col ms-sm6">
-                                                        <!-- Empty column for balanced layout -->
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            <div style="margin-top: 15px;">
-                                                <label class="ms-Label ms-font-s">Excluded names (comma separated):</label>
-                                                <input id="excluded-names" type="text" class="ms-TextField-field" placeholder="e.g., John, Mike, Admin" style="width: 100%; margin-top: 5px;">
-                                            </div>
-                                            
-                                            <div style="margin-top: 15px;">
-                                                <label class="ms-Label ms-font-s">Minimum characters for partial matching:</label>
-                                                <input id="min-partial-match-length" type="number" class="ms-TextField-field" value="3" min="2" max="10" style="width: 100px; margin-top: 5px;">
-                                                <p class="ms-font-xs" style="color: #666; margin-top: 5px;">
-                                                    Only words with at least this many characters will be considered for partial matching (prevents "and" matching "Andrew")
-                                                </p>
-                                            </div>
-                                            
-                                            <div style="margin-top: 15px;">
-                                                <input type="checkbox" id="use-nickname-database" class="ms-Checkbox-input" checked>
-                                                <label for="use-nickname-database" class="ms-Label ms-font-s">Use built-in nickname database</label>
-                                                <p class="ms-font-xs" style="color: #666; margin-top: 5px;">
-                                                    Automatically matches common nicknames (Bill → William, Bob → Robert, etc.)
-                                                </p>
-                                            </div>
-                                            
-                                            <div id="nickname-database-config" style="margin-top: 15px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
-                                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                                    <label class="ms-Label ms-font-s" style="font-weight: 600;">Custom Nicknames:</label>
-                                                    <div role="button" id="add-nickname" class="ms-Button" style="padding: 4px 8px; font-size: 12px;">
-                                                        <span class="ms-Button-label">+ Add Nickname</span>
-                                                    </div>
-                                                </div>
-                                                
-                                                <div id="nickname-list" class="nickname-list">
-                                                    <!-- Dynamic nickname entries will be inserted here -->
-                                                </div>
-                                                
-                                                <div style="margin-top: 10px;">
-                                                    <div role="button" id="reset-nicknames" class="ms-Button" style="font-size: 12px;">
-                                                        <span class="ms-Button-label">Reset to Default Nicknames</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            <hr style="margin: 25px 0;">
-                                            
-                                            <div style="text-align: center;">
-                                                <div role="button" id="save-rules" class="ms-Button ms-Button--primary" style="font-size: 16px; font-weight: 600;">
-                                                    <span class="ms-Button-label">Save Rules</span>
-                                                </div>
-                                                <p class="ms-font-xs" style="margin-top: 8px; color: #666;">
-                                                    Saves rule configuration to the current matter profile.
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <hr style="margin: 30px 0;">
-                        
-                        <!-- Delete Matter Section -->
-                        <div style="text-align: center; padding: 20px; background-color: #fef5f5; border-radius: 5px;">
-                            <h3 class="ms-font-l">Delete Matter</h3>
-                            <p class="ms-font-m" style="margin-bottom: 15px;">Permanently remove the currently selected matter profile.</p>
-                            <div role="button" id="delete-matter" class="ms-Button ms-Button--danger" style="width: 50%; margin: 0 auto;">
-                                <span class="ms-Button-label">Delete Selected Matter</span>
-                            </div>
-                        </div>
-                    </div>
+                  </div>
                 </div>
-            </div>
-        </div>
-    </main>
-</body>
+              </div>
 
+              <!-- Current Matter Display -->
+              <div
+                id="current-matter-display"
+                style="
+                  display: none;
+                  margin-bottom: 20px;
+                  padding: 15px;
+                  background-color: #f0f0f0;
+                  border-radius: 5px;
+                "
+              >
+                <h3 class="ms-font-l" style="margin: 0 0 5px 0">Current Matter</h3>
+                <p
+                  class="ms-font-m"
+                  id="current-matter-name"
+                  style="margin: 0; font-weight: 600; color: #0078d4"
+                ></p>
+              </div>
+
+              <h3 class="ms-font-l">Quick Actions</h3>
+              <p class="ms-font-m">
+                Perform common tasks on your worksheet. Select a matter profile above first.
+              </p>
+
+              <div style="margin-top: 15px">
+                <div
+                  role="button"
+                  id="format-spreadsheet"
+                  class="ms-Button ms-Button--primary"
+                  style="width: 100%; margin-bottom: 10px"
+                >
+                  <span class="ms-Button-label">Format Spreadsheet</span>
+                </div>
+
+                <div
+                  role="button"
+                  id="add-columns"
+                  class="ms-Button ms-Button--primary"
+                  style="width: 100%; margin-bottom: 10px"
+                >
+                  <span class="ms-Button-label">Add Columns</span>
+                </div>
+
+                <div
+                  role="button"
+                  id="color-code-rows"
+                  class="ms-Button ms-Button--primary"
+                  style="width: 100%; margin-bottom: 10px"
+                >
+                  <span class="ms-Button-label">Color Code Rows</span>
+                </div>
+
+                <div
+                  role="button"
+                  id="apply-all-rules"
+                  class="ms-Button ms-Button--primary"
+                  style="
+                    width: 100%;
+                    margin-bottom: 10px;
+                    background-color: #6b46c1;
+                    border-color: #6b46c1;
+                  "
+                >
+                  <span class="ms-Button-label">Apply Rules</span>
+                </div>
+
+                <div
+                  role="button"
+                  id="undo-name-rules"
+                  class="ms-Button"
+                  style="width: 100%; margin-bottom: 10px"
+                  disabled
+                >
+                  <span class="ms-Button-label">Undo Last Application</span>
+                </div>
+              </div>
+
+              <div id="message" class="ms-MessageBar" style="display: none; margin-top: 20px">
+                <div class="ms-MessageBar-content">
+                  <div class="ms-MessageBar-text" id="message-text"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Settings Tab Content -->
+            <div id="settings-tab" class="tab-content">
+              <!-- New Matter Creation Section (hidden by default) -->
+              <div
+                id="new-matter-section"
+                style="
+                  display: none;
+                  margin-bottom: 30px;
+                  padding: 20px;
+                  background-color: #f5f5f5;
+                  border-radius: 5px;
+                "
+              >
+                <h3 class="ms-font-l">Create New Matter</h3>
+                <p class="ms-font-m">Enter a name for your new matter profile.</p>
+
+                <div class="ms-Grid" style="margin-top: 15px">
+                  <div class="ms-Grid-row">
+                    <div class="ms-Grid-col ms-sm8">
+                      <label class="ms-Label">Matter Name:</label>
+                      <input
+                        id="new-matter-name"
+                        type="text"
+                        class="ms-TextField-field"
+                        placeholder="Enter matter name"
+                      />
+                    </div>
+                    <div class="ms-Grid-col ms-sm4">
+                      <label class="ms-Label" style="visibility: hidden">Action</label>
+                      <div
+                        role="button"
+                        id="save-matter"
+                        class="ms-Button ms-Button--primary"
+                        style="width: 100%"
+                      >
+                        <span class="ms-Button-label">Save</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Formatting Dropdown Section -->
+              <div class="dropdown-section">
+                <div class="dropdown-header" data-target="formatting-content">
+                  <h3 class="ms-font-l">Formatting</h3>
+                  <span class="dropdown-arrow">▼</span>
+                </div>
+                <div id="formatting-content" class="dropdown-content">
+                  <p class="ms-font-m">Customize colors and styling for your worksheets.</p>
+
+                  <div style="margin-top: 15px">
+                    <div class="ms-Grid">
+                      <div class="ms-Grid-row">
+                        <div class="ms-Grid-col ms-sm6">
+                          <label class="ms-Label ms-font-s">Header Background Color:</label>
+                          <input
+                            id="header-bg-color"
+                            type="color"
+                            value="#4472C4"
+                            style="width: 100%; height: 35px; margin-top: 5px"
+                          />
+                        </div>
+                        <div class="ms-Grid-col ms-sm6">
+                          <label class="ms-Label ms-font-s">Header Text Color:</label>
+                          <input
+                            id="header-text-color"
+                            type="color"
+                            value="#FFFFFF"
+                            style="width: 100%; height: 35px; margin-top: 5px"
+                          />
+                        </div>
+                      </div>
+                      <div class="ms-Grid-row" style="margin-top: 15px">
+                        <div class="ms-Grid-col ms-sm6">
+                          <label class="ms-Label ms-font-s">Alternating Row Color 1:</label>
+                          <input
+                            id="alt-row-color1"
+                            type="color"
+                            value="#FFFFFF"
+                            style="width: 100%; height: 35px; margin-top: 5px"
+                          />
+                        </div>
+                        <div class="ms-Grid-col ms-sm6">
+                          <label class="ms-Label ms-font-s">Alternating Row Color 2:</label>
+                          <input
+                            id="alt-row-color2"
+                            type="color"
+                            value="#F8F9FA"
+                            style="width: 100%; height: 35px; margin-top: 5px"
+                          />
+                        </div>
+                      </div>
+                      <div class="ms-Grid-row" style="margin-top: 15px">
+                        <div class="ms-Grid-col ms-sm6">
+                          <label class="ms-Label ms-font-s">Border Color:</label>
+                          <input
+                            id="border-color"
+                            type="color"
+                            value="#D1D5DB"
+                            style="width: 100%; height: 35px; margin-top: 5px"
+                          />
+                        </div>
+                        <div class="ms-Grid-col ms-sm6">
+                          <label class="ms-Label ms-font-s">Max Column Width (pts):</label>
+                          <input
+                            id="max-column-width"
+                            type="number"
+                            value="300"
+                            min="100"
+                            max="1000"
+                            style="width: 100%; height: 35px; margin-top: 5px"
+                          />
+                        </div>
+                      </div>
+                      <div class="ms-Grid-row" style="margin-top: 15px">
+                        <div class="ms-Grid-col ms-sm6">
+                          <label class="ms-Label ms-font-s">Vertical Alignment:</label>
+                          <select
+                            id="vertical-alignment"
+                            class="ms-Dropdown"
+                            style="width: 100%; padding: 8px; margin-top: 5px"
+                          >
+                            <option value="top">Top</option>
+                            <option value="center" selected>Middle</option>
+                            <option value="bottom">Bottom</option>
+                          </select>
+                        </div>
+                        <div class="ms-Grid-col ms-sm6">
+                          <input
+                            type="checkbox"
+                            id="enable-alternating-rows"
+                            class="ms-Checkbox-input"
+                            checked
+                            style="margin-top: 25px"
+                          />
+                          <label for="enable-alternating-rows" class="ms-Label ms-font-s"
+                            >Enable alternating row colors</label
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <hr style="margin: 30px 0" />
+
+                  <h3 class="ms-font-l">Charge Column Settings</h3>
+                  <p class="ms-font-m">Configure how the charge column behaves.</p>
+
+                  <div style="margin-top: 15px">
+                    <div class="ms-TextField">
+                      <label class="ms-Label">Column Header (default: "Charge")</label>
+                      <input
+                        id="column-header"
+                        type="text"
+                        class="ms-TextField-field"
+                        placeholder="Charge"
+                        value="Charge"
+                      />
+                    </div>
+
+                    <div style="margin-top: 15px">
+                      <label class="ms-Label">Insert at column:</label>
+                      <select
+                        id="column-position"
+                        class="ms-Dropdown"
+                        style="width: 100%; padding: 8px"
+                      >
+                        <option value="next">Next available column</option>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                        <option value="D">D</option>
+                        <option value="E">E</option>
+                        <option value="F">F</option>
+                        <option value="G">G</option>
+                        <option value="H">H</option>
+                        <option value="I">I</option>
+                        <option value="J">J</option>
+                      </select>
+                    </div>
+
+                    <div style="margin-top: 15px">
+                      <input type="checkbox" id="prepopulate-charge" class="ms-Checkbox-input" />
+                      <label for="prepopulate-charge" class="ms-Label"
+                        >Prepopulate based on Narrative/Description column</label
+                      >
+                    </div>
+
+                    <div
+                      id="prepopulate-rules"
+                      style="
+                        display: none;
+                        margin-top: 15px;
+                        padding: 15px;
+                        background-color: #f5f5f5;
+                      "
+                    >
+                      <p class="ms-font-s"><strong>Prepopulation Rules:</strong></p>
+                      <div style="margin-top: 10px">
+                        <label class="ms-Label ms-font-s"
+                          >Keywords for 'N' (No Charge) - comma separated:</label
+                        >
+                        <input
+                          id="no-charge-keywords"
+                          type="text"
+                          class="ms-TextField-field"
+                          placeholder="NC, DO NOT CHARGE, Non Chargeable"
+                          value="NC, DO NOT CHARGE, Non Chargeable"
+                        />
+                      </div>
+                      <p class="ms-font-xs" style="margin-top: 15px">
+                        <strong>Logic:</strong><br />
+                        • If text starts with any No Charge keyword → 'N' (No)<br />
+                        • Otherwise → 'Y' (Yes)<br />
+                        • Empty cells → 'Q' (Query)
+                      </p>
+                    </div>
+                  </div>
+
+                  <hr style="margin: 30px 0" />
+
+                  <h3 class="ms-font-l">Column Options</h3>
+                  <p class="ms-font-m">
+                    Configure which columns to add when using "Add Columns" on the Main tab.
+                  </p>
+
+                  <div style="margin-top: 15px">
+                    <div style="margin-bottom: 15px">
+                      <input type="checkbox" id="add-amended-narrative" class="ms-Checkbox-input" />
+                      <label for="add-amended-narrative" class="ms-Label"
+                        >Add Amended Narrative Column</label
+                      >
+                      <p class="ms-font-xs" style="margin-top: 5px; color: #666; margin-left: 20px">
+                        Renames existing Narrative to "Original Narrative" and adds "Amended
+                        Narrative" to its right.
+                      </p>
+                    </div>
+
+                    <div style="margin-bottom: 15px">
+                      <input type="checkbox" id="add-amended-time" class="ms-Checkbox-input" />
+                      <label for="add-amended-time" class="ms-Label">Add Amended Time Column</label>
+                      <p class="ms-font-xs" style="margin-top: 5px; color: #666; margin-left: 20px">
+                        Renames existing Time to "Original Time" and adds "Amended Time" to its
+                        right.
+                      </p>
+                    </div>
+
+                    <div style="margin-bottom: 15px">
+                      <input type="checkbox" id="add-notes-column" class="ms-Checkbox-input" />
+                      <label for="add-notes-column" class="ms-Label">Add Notes Column</label>
+                      <p class="ms-font-xs" style="margin-top: 5px; color: #666; margin-left: 20px">
+                        Adds a Notes column at the far right to track which rules have been applied
+                        to each row. <strong>Note:</strong> This column is automatically added when
+                        Name Standardisation rule is enabled.
+                      </p>
+                    </div>
+                  </div>
+
+                  <hr style="margin: 30px 0" />
+
+                  <div style="text-align: center">
+                    <div
+                      role="button"
+                      id="save-current-settings"
+                      class="ms-Button ms-Button--primary"
+                      style="width: 100%; font-size: 16px; font-weight: 600"
+                    >
+                      <span class="ms-Button-label">Save Current Settings</span>
+                    </div>
+                    <p class="ms-font-xs" style="margin-top: 8px; color: #666">
+                      Updates the selected matter profile with current settings.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Participants Dropdown Section -->
+              <div class="dropdown-section">
+                <div class="dropdown-header" data-target="participants-content">
+                  <h3 class="ms-font-l">Participants</h3>
+                  <span class="dropdown-arrow">▼</span>
+                </div>
+                <div id="participants-content" class="dropdown-content" style="display: none">
+                  <!-- Fee Earners Section -->
+                  <h4 class="ms-font-l">Fee Earners</h4>
+                  <p class="ms-font-m">Manage fee earner information and billing contacts.</p>
+                  <div
+                    id="duplicate-names-info"
+                    style="
+                      display: none;
+                      background-color: #fff3cd;
+                      border: 1px solid #ffeaa7;
+                      border-radius: 4px;
+                      padding: 10px;
+                      margin-bottom: 15px;
+                    "
+                  >
+                    <p class="ms-font-s" style="margin: 0; color: #6c5700">
+                      <strong>⚠️ Duplicate Names Detected:</strong> Rows highlighted in yellow have
+                      duplicate first names. Use the "Use as Default" checkbox to specify which
+                      entry should be used for name standardisation rules.
+                    </p>
+                  </div>
+
+                  <div style="margin: 15px 0">
+                    <div
+                      role="button"
+                      id="update-from-spreadsheet"
+                      class="ms-Button ms-Button--primary"
+                      style="margin-bottom: 15px"
+                    >
+                      <span class="ms-Button-label">Update for current spreadsheet</span>
+                    </div>
+                    <p class="ms-font-xs" style="color: #666; margin-bottom: 15px">
+                      Scans the current spreadsheet and updates the fee earner list based on Name,
+                      Role, and Rate columns.
+                    </p>
+                  </div>
+
+                  <!-- Fee Earners Table -->
+                  <div class="fee-earners-container">
+                    <table id="fee-earners-table" class="participants-table">
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th>Role</th>
+                          <th>Rate</th>
+                          <th>Email</th>
+                          <th>Use as Default</th>
+                          <th>Billing Contact</th>
+                          <th>Billing Contact Name</th>
+                          <th>Billing Contact Email</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody id="fee-earners-tbody">
+                        <!-- Dynamic rows will be inserted here -->
+                      </tbody>
+                    </table>
+
+                    <div style="margin-top: 10px">
+                      <div role="button" id="add-fee-earner" class="ms-Button" style="width: auto">
+                        <span class="ms-Button-label">+ Add Fee Earner</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style="text-align: center; margin-top: 20px">
+                    <div
+                      role="button"
+                      id="save-participants"
+                      class="ms-Button ms-Button--primary"
+                      style="font-size: 16px; font-weight: 600"
+                    >
+                      <span class="ms-Button-label">Save Participants</span>
+                    </div>
+                    <p class="ms-font-xs" style="margin-top: 8px; color: #666">
+                      Saves fee earner information to the current matter profile.
+                    </p>
+                  </div>
+
+                  <hr style="margin: 30px 0" />
+
+                  <!-- Other Participants Section -->
+                  <h4 class="ms-font-l">Other Participants</h4>
+                  <p class="ms-font-m">
+                    Additional participant management options will be available here.
+                  </p>
+                  <p class="ms-font-s" style="color: #666; font-style: italic">Coming soon...</p>
+                </div>
+              </div>
+
+              <!-- Rules Dropdown Section -->
+              <div class="dropdown-section">
+                <div class="dropdown-header" data-target="rules-content">
+                  <h3 class="ms-font-l">Rules</h3>
+                  <span class="dropdown-arrow">▼</span>
+                </div>
+                <div id="rules-content" class="dropdown-content" style="display: none">
+                  <p class="ms-font-m">Configure automated data processing rules.</p>
+
+                  <!-- Name Standardisation Rule Section -->
+                  <div class="dropdown-section">
+                    <div class="dropdown-header" data-target="name-standardisation-content">
+                      <div style="display: flex; align-items: center; gap: 8px">
+                        <input
+                          type="checkbox"
+                          id="name-standardisation-enabled"
+                          class="ms-Checkbox-input"
+                        />
+                        <h3 class="ms-font-l" style="margin: 0">Name Standardisation</h3>
+                      </div>
+                      <span class="dropdown-arrow">▼</span>
+                    </div>
+                    <div
+                      id="name-standardisation-content"
+                      class="dropdown-content"
+                      style="display: none"
+                    >
+                      <p class="ms-font-m">
+                        Automatically replace first names in narratives with full names from Fee
+                        Earners list.
+                      </p>
+
+                      <div
+                        style="
+                          margin-top: 15px;
+                          padding: 15px;
+                          background-color: #f9f9f9;
+                          border-radius: 4px;
+                        "
+                      >
+                        <div class="ms-Grid">
+                          <div class="ms-Grid-row">
+                            <div class="ms-Grid-col ms-sm6">
+                              <input
+                                type="checkbox"
+                                id="partial-matches"
+                                class="ms-Checkbox-input"
+                                checked
+                              />
+                              <label for="partial-matches" class="ms-Label ms-font-s"
+                                >Allow partial matches (Johnny → John)</label
+                              >
+                            </div>
+                            <div class="ms-Grid-col ms-sm6">
+                              <input
+                                type="checkbox"
+                                id="date-matching"
+                                class="ms-Checkbox-input"
+                                checked
+                              />
+                              <label for="date-matching" class="ms-Label ms-font-s"
+                                >Use date-based selection (±5 days)</label
+                              >
+                            </div>
+                          </div>
+                          <div class="ms-Grid-row" style="margin-top: 10px">
+                            <div class="ms-Grid-col ms-sm6">
+                              <input
+                                type="checkbox"
+                                id="first-occurrence-only"
+                                class="ms-Checkbox-input"
+                                checked
+                              />
+                              <label for="first-occurrence-only" class="ms-Label ms-font-s"
+                                >Replace only first occurrence</label
+                              >
+                            </div>
+                            <div class="ms-Grid-col ms-sm6">
+                              <!-- Empty column for balanced layout -->
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style="margin-top: 15px">
+                          <label class="ms-Label ms-font-s"
+                            >Excluded names (comma separated):</label
+                          >
+                          <input
+                            id="excluded-names"
+                            type="text"
+                            class="ms-TextField-field"
+                            placeholder="e.g., John, Mike, Admin"
+                            style="width: 100%; margin-top: 5px"
+                          />
+                        </div>
+
+                        <div style="margin-top: 15px">
+                          <label class="ms-Label ms-font-s"
+                            >Minimum characters for partial matching:</label
+                          >
+                          <input
+                            id="min-partial-match-length"
+                            type="number"
+                            class="ms-TextField-field"
+                            value="3"
+                            min="2"
+                            max="10"
+                            style="width: 100px; margin-top: 5px"
+                          />
+                          <p class="ms-font-xs" style="color: #666; margin-top: 5px">
+                            Only words with at least this many characters will be considered for
+                            partial matching (prevents "and" matching "Andrew")
+                          </p>
+                        </div>
+
+                        <div style="margin-top: 15px">
+                          <input
+                            type="checkbox"
+                            id="use-nickname-database"
+                            class="ms-Checkbox-input"
+                            checked
+                          />
+                          <label for="use-nickname-database" class="ms-Label ms-font-s"
+                            >Use built-in nickname database</label
+                          >
+                          <p class="ms-font-xs" style="color: #666; margin-top: 5px">
+                            Automatically matches common nicknames (Bill → William, Bob → Robert,
+                            etc.)
+                          </p>
+                        </div>
+
+                        <div
+                          id="nickname-database-config"
+                          style="
+                            margin-top: 15px;
+                            padding: 15px;
+                            background-color: #f9f9f9;
+                            border-radius: 4px;
+                          "
+                        >
+                          <div
+                            style="
+                              display: flex;
+                              justify-content: space-between;
+                              align-items: center;
+                              margin-bottom: 10px;
+                            "
+                          >
+                            <label class="ms-Label ms-font-s" style="font-weight: 600"
+                              >Custom Nicknames:</label
+                            >
+                            <div
+                              role="button"
+                              id="add-nickname"
+                              class="ms-Button"
+                              style="padding: 4px 8px; font-size: 12px"
+                            >
+                              <span class="ms-Button-label">+ Add Nickname</span>
+                            </div>
+                          </div>
+
+                          <div id="nickname-list" class="nickname-list">
+                            <!-- Dynamic nickname entries will be inserted here -->
+                          </div>
+
+                          <div style="margin-top: 10px">
+                            <div
+                              role="button"
+                              id="reset-nicknames"
+                              class="ms-Button"
+                              style="font-size: 12px"
+                            >
+                              <span class="ms-Button-label">Reset to Default Nicknames</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <hr style="margin: 25px 0" />
+
+                        <div style="text-align: center">
+                          <div
+                            role="button"
+                            id="save-rules"
+                            class="ms-Button ms-Button--primary"
+                            style="font-size: 16px; font-weight: 600"
+                          >
+                            <span class="ms-Button-label">Save Rules</span>
+                          </div>
+                          <p class="ms-font-xs" style="margin-top: 8px; color: #666">
+                            Saves rule configuration to the current matter profile.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <hr style="margin: 30px 0" />
+
+              <!-- Delete Matter Section -->
+              <div
+                style="
+                  text-align: center;
+                  padding: 20px;
+                  background-color: #fef5f5;
+                  border-radius: 5px;
+                "
+              >
+                <h3 class="ms-font-l">Delete Matter</h3>
+                <p class="ms-font-m" style="margin-bottom: 15px">
+                  Permanently remove the currently selected matter profile.
+                </p>
+                <div
+                  role="button"
+                  id="delete-matter"
+                  class="ms-Button ms-Button--danger"
+                  style="width: 50%; margin: 0 auto"
+                >
+                  <span class="ms-Button-label">Delete Selected Matter</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </body>
 </html>
