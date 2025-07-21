@@ -15,6 +15,7 @@ Office.onReady((info) => {
     document.getElementById("format-spreadsheet").onclick = formatSpreadsheet;
     document.getElementById("add-charge-column").onclick = addChargeColumn;
     document.getElementById("color-code-rows").onclick = colorCodeRows;
+    document.getElementById("add-amended-columns").onclick = addAmendedColumns;
 
     // Matter profile functionality
     document.getElementById("save-matter").onclick = saveMatterProfile;
@@ -360,6 +361,20 @@ function findNarrativeColumn(headerRow: any[]): number {
   return -1;
 }
 
+function findTimeColumn(headerRow: any[]): number {
+  const timeKeywords = ["time", "hours", "mins", "minutes", "duration"];
+
+  for (let i = 0; i < headerRow.length; i++) {
+    if (headerRow[i]) {
+      const headerText = headerRow[i].toString().toLowerCase();
+      if (timeKeywords.some((keyword) => headerText.includes(keyword))) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
 function prepopulateChargeValues(allValues: any[][], narrativeColumnIndex: number): string[][] {
   const noChargeKeywords = (document.getElementById("no-charge-keywords") as HTMLInputElement).value
     .toLowerCase()
@@ -471,6 +486,163 @@ export async function colorCodeRows() {
   } catch (error) {
     console.error(error);
     showMessage("An error occurred: " + error.message, "error");
+  }
+}
+
+export async function addAmendedColumns() {
+  try {
+    await Excel.run(async (context) => {
+      // Get the active worksheet
+      const worksheet = context.workbook.worksheets.getActiveWorksheet();
+
+      // Get the used range
+      const usedRange = worksheet.getUsedRange();
+      usedRange.load(["rowCount", "columnCount", "values"]);
+
+      await context.sync();
+
+      if (!usedRange) {
+        showMessage("No data found in the worksheet.", "error");
+        return;
+      }
+
+      const headerRow = usedRange.values[0];
+      const narrativeColumnIndex = findNarrativeColumn(headerRow);
+      const timeColumnIndex = findTimeColumn(headerRow);
+
+      if (narrativeColumnIndex === -1 && timeColumnIndex === -1) {
+        showMessage("No Narrative or Time columns found to process.", "error");
+        return;
+      }
+
+      // Get current matter settings for formatting
+      const headerBgColor = (document.getElementById("header-bg-color") as HTMLInputElement).value;
+      const headerTextColor = (document.getElementById("header-text-color") as HTMLInputElement).value;
+      const borderColor = (document.getElementById("border-color") as HTMLInputElement).value;
+      const enableAlternatingRows = (document.getElementById("enable-alternating-rows") as HTMLInputElement).checked;
+      const altRowColor1 = (document.getElementById("alt-row-color1") as HTMLInputElement).value;
+      const altRowColor2 = (document.getElementById("alt-row-color2") as HTMLInputElement).value;
+
+      let processedColumns = [];
+
+      // Process Narrative column
+      if (narrativeColumnIndex !== -1) {
+        const narrativeColumnLetter = getColumnLetter(narrativeColumnIndex + 1);
+        const amendedNarrativeColumnLetter = getColumnLetter(narrativeColumnIndex + 2);
+
+        // Rename existing column to "Original Narrative"
+        const originalHeaderCell = worksheet.getRange(`${narrativeColumnLetter}1`);
+        originalHeaderCell.values = [["Original Narrative"]];
+
+        // Insert new column to the right
+        const insertRange = worksheet.getRange(`${amendedNarrativeColumnLetter}:${amendedNarrativeColumnLetter}`);
+        insertRange.insert(Excel.InsertShiftDirection.right);
+
+        // Add "Amended Narrative" header
+        const amendedHeaderCell = worksheet.getRange(`${amendedNarrativeColumnLetter}1`);
+        amendedHeaderCell.values = [["Amended Narrative"]];
+        amendedHeaderCell.format.font.bold = true;
+        amendedHeaderCell.format.fill.color = headerBgColor;
+        amendedHeaderCell.format.font.color = headerTextColor;
+        amendedHeaderCell.format.horizontalAlignment = "Center";
+
+        // Apply borders to header
+        const headerBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
+        headerBorderItems.forEach((item) => {
+          amendedHeaderCell.format.borders.getItem(item).style = "Continuous";
+          amendedHeaderCell.format.borders.getItem(item).color = borderColor;
+        });
+
+        // Format data cells in the new column
+        const amendedDataRange = worksheet.getRange(`${amendedNarrativeColumnLetter}2:${amendedNarrativeColumnLetter}${usedRange.rowCount}`);
+        const dataBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
+        dataBorderItems.forEach((item) => {
+          amendedDataRange.format.borders.getItem(item).style = "Continuous";
+          amendedDataRange.format.borders.getItem(item).color = borderColor;
+        });
+
+        // Apply alternating row colors if enabled
+        if (enableAlternatingRows) {
+          for (let row = 2; row <= usedRange.rowCount; row++) {
+            const cell = worksheet.getRange(`${amendedNarrativeColumnLetter}${row}`);
+            if (row % 2 === 0) {
+              cell.format.fill.color = altRowColor2;
+            } else {
+              cell.format.fill.color = altRowColor1;
+            }
+          }
+        }
+
+        processedColumns.push("Narrative");
+      }
+
+      // Process Time column (adjust index if narrative column was processed)
+      if (timeColumnIndex !== -1) {
+        let adjustedTimeIndex = timeColumnIndex;
+        if (narrativeColumnIndex !== -1 && timeColumnIndex > narrativeColumnIndex) {
+          adjustedTimeIndex = timeColumnIndex + 1; // Account for inserted column
+        }
+
+        const timeColumnLetter = getColumnLetter(adjustedTimeIndex + 1);
+        const amendedTimeColumnLetter = getColumnLetter(adjustedTimeIndex + 2);
+
+        // Rename existing column to "Original Time"
+        const originalHeaderCell = worksheet.getRange(`${timeColumnLetter}1`);
+        originalHeaderCell.values = [["Original Time"]];
+
+        // Insert new column to the right
+        const insertRange = worksheet.getRange(`${amendedTimeColumnLetter}:${amendedTimeColumnLetter}`);
+        insertRange.insert(Excel.InsertShiftDirection.right);
+
+        // Add "Amended Time" header
+        const amendedHeaderCell = worksheet.getRange(`${amendedTimeColumnLetter}1`);
+        amendedHeaderCell.values = [["Amended Time"]];
+        amendedHeaderCell.format.font.bold = true;
+        amendedHeaderCell.format.fill.color = headerBgColor;
+        amendedHeaderCell.format.font.color = headerTextColor;
+        amendedHeaderCell.format.horizontalAlignment = "Center";
+
+        // Apply borders to header
+        const headerBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
+        headerBorderItems.forEach((item) => {
+          amendedHeaderCell.format.borders.getItem(item).style = "Continuous";
+          amendedHeaderCell.format.borders.getItem(item).color = borderColor;
+        });
+
+        // Format data cells in the new column
+        const amendedDataRange = worksheet.getRange(`${amendedTimeColumnLetter}2:${amendedTimeColumnLetter}${usedRange.rowCount}`);
+        const dataBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
+        dataBorderItems.forEach((item) => {
+          amendedDataRange.format.borders.getItem(item).style = "Continuous";
+          amendedDataRange.format.borders.getItem(item).color = borderColor;
+        });
+
+        // Apply alternating row colors if enabled
+        if (enableAlternatingRows) {
+          for (let row = 2; row <= usedRange.rowCount; row++) {
+            const cell = worksheet.getRange(`${amendedTimeColumnLetter}${row}`);
+            if (row % 2 === 0) {
+              cell.format.fill.color = altRowColor2;
+            } else {
+              cell.format.fill.color = altRowColor1;
+            }
+          }
+        }
+
+        processedColumns.push("Time");
+      }
+
+      await context.sync();
+
+      const message = processedColumns.length > 0 
+        ? `Successfully added Amended ${processedColumns.join(" and ")} column${processedColumns.length > 1 ? "s" : ""} and renamed existing column${processedColumns.length > 1 ? "s" : ""} to Original.`
+        : "No columns were processed.";
+      
+      showMessage(message, "success");
+    });
+  } catch (error) {
+    console.error(error);
+    showMessage("An error occurred while adding amended columns: " + error.message, "error");
   }
 }
 
