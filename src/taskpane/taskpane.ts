@@ -666,8 +666,11 @@ async function addAmendedColumn(
     }
   }
 
-  // Auto-fit column width
+  // Auto-fit column widths for both original (renamed) and amended columns
+  const originalColumn = worksheet.getRange(`${columnLetter}:${columnLetter}`);
   const amendedColumn = worksheet.getRange(`${amendedColumnLetter}:${amendedColumnLetter}`);
+  
+  originalColumn.format.autofitColumns();
   amendedColumn.format.autofitColumns();
 
   return amendedName.split(" ")[1]; // Return "Narrative" or "Time"
@@ -751,6 +754,17 @@ export async function addColumns() {
         // Add charge column at the next available column (far right)
         await addChargeColumnAtPosition(worksheet, usedRange, usedRange.columnCount + 1);
         processedColumns.push("Charge");
+      }
+
+      // Final auto-fit pass to ensure all columns are properly sized
+      if (processedColumns.length > 0) {
+        usedRange = worksheet.getUsedRange();
+        usedRange.load(["columnCount"]);
+        await context.sync();
+        
+        // Auto-fit all columns in the used range to account for any formatting changes
+        const allColumns = usedRange.getEntireColumn();
+        allColumns.format.autofitColumns();
       }
 
       await context.sync();
