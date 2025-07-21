@@ -3,7 +3,7 @@
  * See LICENSE in the project root for license information.
  */
 
-/* global console, document, Excel, Office, HTMLInputElement, HTMLSelectElement, setTimeout, localStorage */
+/* global console, document, Excel, Office, HTMLInputElement, HTMLSelectElement, HTMLElement, setTimeout, localStorage */
 
 // Track whether a matter is currently loaded
 let currentMatterLoaded: string | null = null;
@@ -576,6 +576,30 @@ function loadMatterProfile() {
   } else {
     showMessage("Matter profile not found.", "error");
   }
+}
+
+export function switchToSettingsTab() {
+  // Remove active class from all buttons and contents
+  const tabButtons = document.querySelectorAll(".tab-button");
+  const tabContents = document.querySelectorAll(".tab-content");
+
+  tabButtons.forEach((btn) => btn.classList.remove("active"));
+  tabContents.forEach((content) => content.classList.remove("active"));
+
+  // Add active class to settings tab
+  const settingsButton = document.querySelector('[data-tab="settings"]') as HTMLElement;
+  settingsButton.classList.add("active");
+  document.getElementById("settings-tab").classList.add("active");
+}
+
+export function showNewMatterSection() {
+  document.getElementById("new-matter-section").style.display = "block";
+  // Focus on the input field
+  (document.getElementById("new-matter-name") as HTMLInputElement).focus();
+}
+
+export function hideNewMatterSection() {
+  document.getElementById("new-matter-section").style.display = "none";
 }
 
 function deleteMatterProfile() {

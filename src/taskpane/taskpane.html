@@ -80,6 +80,7 @@
                                         <label class="ms-Label ms-font-s">Matter Profile:</label>
                                         <select id="matter-select" class="ms-Dropdown" style="width: 100%; padding: 8px;">
                                             <option value="">-- Select a Matter --</option>
+                                            <option value="__new__" style="font-style: italic;">+ Add New Matter</option>
                                         </select>
                                     </div>
                                 </div>
@@ -89,32 +90,26 @@
                     
                     <!-- Settings Tab Content -->
                     <div id="settings-tab" class="tab-content">
-                        <h3 class="ms-font-l">Matter Profile Management</h3>
-                        <p class="ms-font-m">Create, update, and delete matter profiles.</p>
-                        
-                        <div class="ms-Grid" style="margin-top: 15px;">
-                            <div class="ms-Grid-row">
-                                <div class="ms-Grid-col ms-sm8">
-                                    <label class="ms-Label">New Matter Name:</label>
-                                    <input id="new-matter-name" type="text" class="ms-TextField-field" placeholder="Enter matter name">
-                                </div>
-                                <div class="ms-Grid-col ms-sm4">
-                                    <label class="ms-Label" style="visibility: hidden;">Action</label>
-                                    <div role="button" id="save-matter" class="ms-Button ms-Button--primary" style="width: 100%;">
-                                        <span class="ms-Button-label">Save</span>
+                        <!-- New Matter Creation Section (hidden by default) -->
+                        <div id="new-matter-section" style="display: none; margin-bottom: 30px; padding: 20px; background-color: #f5f5f5; border-radius: 5px;">
+                            <h3 class="ms-font-l">Create New Matter</h3>
+                            <p class="ms-font-m">Enter a name for your new matter profile.</p>
+                            
+                            <div class="ms-Grid" style="margin-top: 15px;">
+                                <div class="ms-Grid-row">
+                                    <div class="ms-Grid-col ms-sm8">
+                                        <label class="ms-Label">Matter Name:</label>
+                                        <input id="new-matter-name" type="text" class="ms-TextField-field" placeholder="Enter matter name">
                                     </div>
-                                </div>
-                            </div>
-                            <div class="ms-Grid-row" style="margin-top: 10px;">
-                                <div class="ms-Grid-col ms-sm12">
-                                    <div role="button" id="delete-matter" class="ms-Button ms-Button--danger" style="width: 100%;">
-                                        <span class="ms-Button-label">Delete Selected Matter</span>
+                                    <div class="ms-Grid-col ms-sm4">
+                                        <label class="ms-Label" style="visibility: hidden;">Action</label>
+                                        <div role="button" id="save-matter" class="ms-Button ms-Button--primary" style="width: 100%;">
+                                            <span class="ms-Button-label">Save</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        
-                        <hr style="margin: 30px 0;">
                         
                         <h3 class="ms-font-l">Formatting Options</h3>
                         <p class="ms-font-m">Customize colors and styling for your worksheets.</p>
@@ -215,8 +210,19 @@
                                 <span class="ms-Button-label">Save Current Settings</span>
                             </div>
                             <p class="ms-font-xs" style="margin-top: 8px; color: #666;">
-                                Updates the selected matter profile with current settings, or creates a new profile if none is selected.
+                                Updates the selected matter profile with current settings.
                             </p>
+                        </div>
+                        
+                        <hr style="margin: 30px 0;">
+                        
+                        <!-- Delete Matter Section -->
+                        <div style="text-align: center; padding: 20px; background-color: #fef5f5; border-radius: 5px;">
+                            <h3 class="ms-font-l">Delete Matter</h3>
+                            <p class="ms-font-m" style="margin-bottom: 15px;">Permanently remove the currently selected matter profile.</p>
+                            <div role="button" id="delete-matter" class="ms-Button ms-Button--danger" style="width: 50%; margin: 0 auto;">
+                                <span class="ms-Button-label">Delete Selected Matter</span>
+                            </div>
                         </div>
                     </div>
                 </div>
