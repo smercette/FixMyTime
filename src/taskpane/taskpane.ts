@@ -25,9 +25,7 @@ Office.onReady((info) => {
   if (info.host === Office.HostType.Excel) {
     document.getElementById("sideload-msg").style.display = "none";
     document.getElementById("app-body").style.display = "flex";
-    document.getElementById("format-spreadsheet").onclick = formatSpreadsheet;
-    document.getElementById("add-columns").onclick = addColumns;
-    document.getElementById("color-code-rows").onclick = colorCodeRows;
+    document.getElementById("apply-formatting").onclick = applyFormatting;
     document.getElementById("apply-all-rules").onclick = applyAllRules;
 
     // Matter profile functionality
@@ -143,6 +141,21 @@ Office.onReady((info) => {
     });
   }
 });
+
+// Combined formatting function that applies all formatting operations
+async function applyFormatting() {
+  try {
+    // Execute all three formatting operations in sequence
+    await formatSpreadsheet();
+    await addColumns();
+    await colorCodeRows();
+    
+    showMessage("Formatting applied successfully.", "success");
+  } catch (error) {
+    console.error("Error applying formatting:", error);
+    showMessage("An error occurred while applying formatting: " + error.message, "error");
+  }
+}
 
 export async function formatSpreadsheet() {
   try {
@@ -2647,11 +2660,15 @@ async function applyAllRules() {
     //   }
     // }
 
-    // Show final result
+    // Show final result and reapply formatting
     if (appliedRules.length > 0) {
+      // Reapply formatting to maintain consistency after rules are applied
+      showMessage("Reapplying formatting to maintain consistency...", "info");
+      await formatSpreadsheet();
+      
       const rulesText = appliedRules.join(", ");
       showMessage(
-        `Successfully applied ${rulesText}. Updated ${totalUpdatedRows} rows total. Undo is available.`,
+        `Successfully applied ${rulesText}. Updated ${totalUpdatedRows} rows total. Formatting reapplied. Undo is available.`,
         "success"
       );
     } else {

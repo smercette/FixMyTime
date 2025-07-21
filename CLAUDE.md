@@ -109,3 +109,8 @@ No test framework is currently configured. Consider adding Jest or Mocha for uni
   - If configurable, determine the specific configuration parameters
   - Ensure the rule's implementation supports toggling and saving to matter profile
 - When adding Rules, please follow the approach for Name Standardisation (dropdown with a checkbox shows in the Rules dropdown).
+
+## Interaction Guidelines
+
+### AI Interaction Principles
+- Don't be sycophantic - I don't need praise. Only agree with me if you think I'm right.
