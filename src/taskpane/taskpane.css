@@ -248,3 +248,103 @@ b {
     padding: 20px;
     border-top: 1px solid #e5e5e5;
 }
+
+/* Participants table styling */
+.participants-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 12px;
+}
+
+.participants-table th,
+.participants-table td {
+    border: 1px solid #e5e5e5;
+    padding: 8px 6px;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.participants-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    color: #333;
+    white-space: nowrap;
+    font-size: 11px;
+}
+
+.participants-table td {
+    background-color: white;
+}
+
+.participants-table input,
+.participants-table select {
+    width: 100%;
+    border: none;
+    background: transparent;
+    padding: 4px;
+    font-size: 12px;
+    min-height: 20px;
+}
+
+.participants-table input:focus,
+.participants-table select:focus {
+    outline: 2px solid #0078d4;
+    outline-offset: -2px;
+    background-color: #f3f2f1;
+}
+
+.participants-table .billing-contact-select {
+    min-width: 80px;
+}
+
+.participants-table .email-input {
+    min-width: 120px;
+}
+
+.participants-table .rate-input {
+    text-align: right;
+    min-width: 60px;
+}
+
+.participants-table .name-input {
+    min-width: 100px;
+}
+
+.participants-table .role-input {
+    min-width: 80px;
+}
+
+.fee-earners-container {
+    overflow-x: auto;
+    margin: 15px 0;
+}
+
+.remove-fee-earner {
+    background-color: #d13438;
+    color: white;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    min-width: 60px;
+}
+
+.remove-fee-earner:hover {
+    background-color: #b91c1c;
+}
+
+.participants-table tr:nth-child(even) td {
+    background-color: #f9f9f9;
+}
+
+.participants-table .disabled-field {
+    background-color: #f5f5f5 !important;
+    color: #999;
+}
+
+.participants-table .disabled-field input {
+    color: #999;
+    cursor: not-allowed;
+}

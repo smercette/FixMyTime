@@ -86,3 +86,10 @@ No test framework is currently configured. Consider adding Jest or Mocha for uni
 - Keep Claude.md file updated as we go (ie, at every commit)
 - Created with comprehensive .gitignore for Node.js/TypeScript projects
 - Uses gh CLI for GitHub operations
+
+## Data Integrity Rules
+
+### Column Protection
+- Data in the following columns should NEVER be changed by the add in: 'Name' 'Date' 'Role' 'Rate'
+- The data in the Narrative and Time / Original Narrative and Original Time columns should also not be changed
+- Any changes that are made by Rules should be done in the Amended Narrative and/or Amended Time columns respectively

@@ -21,6 +21,13 @@ Office.onReady((info) => {
     document.getElementById("delete-matter").onclick = deleteMatterProfile;
     document.getElementById("save-current-settings").onclick = saveCurrentSettings;
 
+    // Fee Earners functionality
+    document.getElementById("add-fee-earner").onclick = () => addFeeEarnerRow();
+    document.getElementById("update-from-spreadsheet").onclick = updateFeeEarnersFromSpreadsheet;
+    
+    // Make removeFeeEarnerRow available globally for onclick handlers
+    (window as any).removeFeeEarnerRow = removeFeeEarnerRow;
+
     // Handle matter selection from dropdown
     const matterSelect = document.getElementById("matter-select") as HTMLSelectElement;
     matterSelect.onchange = () => {
@@ -38,6 +45,9 @@ Office.onReady((info) => {
 
     // Load saved matter profiles on startup
     loadMatterProfiles();
+    
+    // Initialize fee earners table with one empty row
+    loadFeeEarnersTable([]);
 
     // Tab switching functionality
     const tabButtons = document.querySelectorAll(".tab-button");
@@ -489,6 +499,48 @@ function findTimeColumn(headerRow: any[]): number {
   return -1;
 }
 
+function findNameColumn(headerRow: any[]): number {
+  const nameKeywords = ["name", "fee earner", "lawyer", "attorney", "solicitor", "person", "who"];
+
+  for (let i = 0; i < headerRow.length; i++) {
+    if (headerRow[i]) {
+      const headerText = headerRow[i].toString().toLowerCase();
+      if (nameKeywords.some((keyword) => headerText.includes(keyword))) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
+function findRoleColumn(headerRow: any[]): number {
+  const roleKeywords = ["role", "title", "position", "grade", "level", "rank"];
+
+  for (let i = 0; i < headerRow.length; i++) {
+    if (headerRow[i]) {
+      const headerText = headerRow[i].toString().toLowerCase();
+      if (roleKeywords.some((keyword) => headerText.includes(keyword))) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
+function findRateColumn(headerRow: any[]): number {
+  const rateKeywords = ["rate", "charge", "cost", "price", "fee", "bill", "amount"];
+
+  for (let i = 0; i < headerRow.length; i++) {
+    if (headerRow[i]) {
+      const headerText = headerRow[i].toString().toLowerCase();
+      if (rateKeywords.some((keyword) => headerText.includes(keyword))) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
 function prepopulateChargeValues(allValues: any[][], narrativeColumnIndex: number): string[][] {
   const noChargeKeywords = (document.getElementById("no-charge-keywords") as HTMLInputElement).value
     .toLowerCase()
@@ -782,6 +834,17 @@ export async function addColumns() {
   }
 }
 
+// Fee Earner Management
+interface FeeEarner {
+  name: string;
+  role: string;
+  rate: number;
+  email: string;
+  billingContact: "Fee Earner" | "Other";
+  billingContactName: string;
+  billingContactEmail: string;
+}
+
 // Matter Profile Management
 interface MatterProfile {
   name: string;
@@ -799,6 +862,7 @@ interface MatterProfile {
   noChargeKeywords: string;
   addAmendedNarrative: boolean;
   addAmendedTime: boolean;
+  feeEarners: FeeEarner[];
 }
 
 function getCurrentSettings(): MatterProfile {
@@ -822,6 +886,7 @@ function getCurrentSettings(): MatterProfile {
     noChargeKeywords: (document.getElementById("no-charge-keywords") as HTMLInputElement).value,
     addAmendedNarrative: (document.getElementById("add-amended-narrative") as HTMLInputElement).checked,
     addAmendedTime: (document.getElementById("add-amended-time") as HTMLInputElement).checked,
+    feeEarners: getCurrentFeeEarners(),
   };
 }
 
@@ -854,6 +919,10 @@ function applySettings(profile: MatterProfile) {
     profile.addAmendedNarrative || false;
   (document.getElementById("add-amended-time") as HTMLInputElement).checked =
     profile.addAmendedTime || false;
+
+  // Apply fee earners settings with backward compatibility defaults
+  const feeEarners = profile.feeEarners || [];
+  loadFeeEarnersTable(feeEarners);
 
   // Update prepopulation rules visibility based on checkbox state
   const rulesDiv = document.getElementById("prepopulate-rules");
@@ -1021,5 +1090,223 @@ function saveCurrentSettings() {
     );
   } else {
     showMessage("Selected matter profile not found. Please create a new profile first.", "error");
+  }
+}
+
+// Fee Earners Management Functions
+function getCurrentFeeEarners(): FeeEarner[] {
+  const tbody = document.getElementById("fee-earners-tbody");
+  if (!tbody) return [];
+
+  const rows = tbody.querySelectorAll("tr");
+  const feeEarners: FeeEarner[] = [];
+
+  rows.forEach((row) => {
+    const nameInput = row.querySelector(".name-input") as HTMLInputElement;
+    const roleInput = row.querySelector(".role-input") as HTMLInputElement;
+    const rateInput = row.querySelector(".rate-input") as HTMLInputElement;
+    const emailInput = row.querySelector(".email-input") as HTMLInputElement;
+    const billingContactSelect = row.querySelector(".billing-contact-select") as HTMLSelectElement;
+    const billingContactNameInput = row.querySelector(".billing-contact-name-input") as HTMLInputElement;
+    const billingContactEmailInput = row.querySelector(".billing-contact-email-input") as HTMLInputElement;
+
+    if (nameInput && roleInput && rateInput && emailInput && billingContactSelect) {
+      feeEarners.push({
+        name: nameInput.value.trim(),
+        role: roleInput.value.trim(),
+        rate: parseFloat(rateInput.value) || 0,
+        email: emailInput.value.trim(),
+        billingContact: billingContactSelect.value as "Fee Earner" | "Other",
+        billingContactName: billingContactNameInput ? billingContactNameInput.value.trim() : "",
+        billingContactEmail: billingContactEmailInput ? billingContactEmailInput.value.trim() : "",
+      });
+    }
+  });
+
+  return feeEarners;
+}
+
+function loadFeeEarnersTable(feeEarners: FeeEarner[]) {
+  const tbody = document.getElementById("fee-earners-tbody");
+  if (!tbody) return;
+
+  tbody.innerHTML = "";
+
+  if (feeEarners.length === 0) {
+    // Add one empty row if no fee earners exist
+    addFeeEarnerRow();
+  } else {
+    feeEarners.forEach((feeEarner) => {
+      addFeeEarnerRowWithData(feeEarner);
+    });
+  }
+}
+
+function addFeeEarnerRow() {
+  const emptyFeeEarner: FeeEarner = {
+    name: "",
+    role: "",
+    rate: 0,
+    email: "",
+    billingContact: "Fee Earner",
+    billingContactName: "",
+    billingContactEmail: "",
+  };
+  addFeeEarnerRowWithData(emptyFeeEarner);
+}
+
+function addFeeEarnerRowWithData(feeEarner: FeeEarner) {
+  const tbody = document.getElementById("fee-earners-tbody");
+  if (!tbody) return;
+
+  const row = document.createElement("tr");
+  const isOtherBilling = feeEarner.billingContact === "Other";
+
+  row.innerHTML = `
+    <td><input type="text" class="name-input" value="${feeEarner.name}" placeholder="Enter name"></td>
+    <td><input type="text" class="role-input" value="${feeEarner.role}" placeholder="Enter role"></td>
+    <td><input type="number" class="rate-input" value="${feeEarner.rate || ''}" placeholder="0.00" step="0.01" min="0"></td>
+    <td><input type="email" class="email-input" value="${feeEarner.email}" placeholder="Enter email"></td>
+    <td>
+      <select class="billing-contact-select">
+        <option value="Fee Earner" ${feeEarner.billingContact === "Fee Earner" ? "selected" : ""}>Fee Earner</option>
+        <option value="Other" ${feeEarner.billingContact === "Other" ? "selected" : ""}>Other</option>
+      </select>
+    </td>
+    <td class="${!isOtherBilling ? 'disabled-field' : ''}">
+      <input type="text" class="billing-contact-name-input" value="${feeEarner.billingContactName}" 
+             placeholder="Enter name" ${!isOtherBilling ? 'disabled' : ''}>
+    </td>
+    <td class="${!isOtherBilling ? 'disabled-field' : ''}">
+      <input type="email" class="billing-contact-email-input" value="${feeEarner.billingContactEmail}" 
+             placeholder="Enter email" ${!isOtherBilling ? 'disabled' : ''}>
+    </td>
+    <td>
+      <button type="button" class="remove-fee-earner" onclick="removeFeeEarnerRow(this)">Remove</button>
+    </td>
+  `;
+
+  tbody.appendChild(row);
+
+  // Add event listener for billing contact change
+  const billingContactSelect = row.querySelector(".billing-contact-select");
+  billingContactSelect?.addEventListener("change", handleBillingContactChange);
+}
+
+function removeFeeEarnerRow(button: HTMLButtonElement) {
+  const row = button.closest("tr");
+  if (row) {
+    row.remove();
+  }
+}
+
+function handleBillingContactChange(event: Event) {
+  const select = event.target as HTMLSelectElement;
+  const row = select.closest("tr");
+  if (!row) return;
+
+  const isOther = select.value === "Other";
+  const billingNameCell = row.children[5] as HTMLTableCellElement;
+  const billingEmailCell = row.children[6] as HTMLTableCellElement;
+  const billingNameInput = billingNameCell.querySelector("input") as HTMLInputElement;
+  const billingEmailInput = billingEmailCell.querySelector("input") as HTMLInputElement;
+
+  if (isOther) {
+    // Enable billing contact fields
+    billingNameCell.classList.remove("disabled-field");
+    billingEmailCell.classList.remove("disabled-field");
+    billingNameInput.disabled = false;
+    billingEmailInput.disabled = false;
+  } else {
+    // Disable and clear billing contact fields
+    billingNameCell.classList.add("disabled-field");
+    billingEmailCell.classList.add("disabled-field");
+    billingNameInput.disabled = true;
+    billingEmailInput.disabled = true;
+    billingNameInput.value = "";
+    billingEmailInput.value = "";
+  }
+}
+
+async function updateFeeEarnersFromSpreadsheet() {
+  try {
+    await Excel.run(async (context) => {
+      // Get the active worksheet
+      const worksheet = context.workbook.worksheets.getActiveWorksheet();
+
+      // Get the used range
+      const usedRange = worksheet.getUsedRange();
+      usedRange.load(["rowCount", "columnCount", "values"]);
+
+      await context.sync();
+
+      if (!usedRange) {
+        showMessage("No data found in the worksheet.", "error");
+        return;
+      }
+
+      const headerRow = usedRange.values[0];
+      const nameColumnIndex = findNameColumn(headerRow);
+      const roleColumnIndex = findRoleColumn(headerRow);
+      const rateColumnIndex = findRateColumn(headerRow);
+
+      if (nameColumnIndex === -1) {
+        showMessage("No Name column found in the spreadsheet.", "error");
+        return;
+      }
+
+      // Extract unique fee earner combinations
+      const uniqueFeeEarners = new Map<string, FeeEarner>();
+
+      // Start from row 1 (skip header row)
+      for (let row = 1; row < usedRange.rowCount; row++) {
+        const nameValue = usedRange.values[row][nameColumnIndex];
+        const roleValue = roleColumnIndex !== -1 ? usedRange.values[row][roleColumnIndex] : "";
+        const rateValue = rateColumnIndex !== -1 ? usedRange.values[row][rateColumnIndex] : "";
+
+        if (nameValue && nameValue.toString().trim()) {
+          const name = nameValue.toString().trim();
+          const role = roleValue ? roleValue.toString().trim() : "";
+          const rate = rateValue ? (parseFloat(rateValue.toString()) || 0) : 0;
+
+          // Create a unique key for this combination
+          const key = `${name}-${role}-${rate}`;
+
+          if (!uniqueFeeEarners.has(key)) {
+            uniqueFeeEarners.set(key, {
+              name: name,
+              role: role,
+              rate: rate,
+              email: "", // Will be manually filled
+              billingContact: "Fee Earner", // Default
+              billingContactName: "",
+              billingContactEmail: "",
+            });
+          }
+        }
+      }
+
+      // Update the fee earners table with found data
+      const feeEarners = Array.from(uniqueFeeEarners.values());
+      
+      if (feeEarners.length > 0) {
+        loadFeeEarnersTable(feeEarners);
+        
+        const foundColumns = [];
+        if (nameColumnIndex !== -1) foundColumns.push("Name");
+        if (roleColumnIndex !== -1) foundColumns.push("Role");
+        if (rateColumnIndex !== -1) foundColumns.push("Rate");
+        
+        showMessage(
+          `Found ${feeEarners.length} unique fee earner${feeEarners.length > 1 ? "s" : ""} from ${foundColumns.join(", ")} column${foundColumns.length > 1 ? "s" : ""}. Please fill in missing information manually.`,
+          "success"
+        );
+      } else {
+        showMessage("No fee earners found in the spreadsheet data.", "warning");
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    showMessage("An error occurred while scanning the spreadsheet: " + error.message, "error");
   }
 }

@@ -253,6 +253,62 @@
                             </div>
                         </div>
                         
+                        <!-- Participants Dropdown Section -->
+                        <div class="dropdown-section">
+                            <div class="dropdown-header" data-target="participants-content">
+                                <h3 class="ms-font-l">Participants</h3>
+                                <span class="dropdown-arrow">▼</span>
+                            </div>
+                            <div id="participants-content" class="dropdown-content" style="display: none;">
+                                <!-- Fee Earners Section -->
+                                <h4 class="ms-font-l">Fee Earners</h4>
+                                <p class="ms-font-m">Manage fee earner information and billing contacts.</p>
+                                
+                                <div style="margin: 15px 0;">
+                                    <div role="button" id="update-from-spreadsheet" class="ms-Button ms-Button--primary" style="margin-bottom: 15px;">
+                                        <span class="ms-Button-label">Update for current spreadsheet</span>
+                                    </div>
+                                    <p class="ms-font-xs" style="color: #666; margin-bottom: 15px;">
+                                        Scans the current spreadsheet and updates the fee earner list based on Name, Role, and Rate columns.
+                                    </p>
+                                </div>
+
+                                <!-- Fee Earners Table -->
+                                <div class="fee-earners-container">
+                                    <table id="fee-earners-table" class="participants-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Role</th>
+                                                <th>Rate</th>
+                                                <th>Email</th>
+                                                <th>Billing Contact</th>
+                                                <th>Billing Contact Name</th>
+                                                <th>Billing Contact Email</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="fee-earners-tbody">
+                                            <!-- Dynamic rows will be inserted here -->
+                                        </tbody>
+                                    </table>
+                                    
+                                    <div style="margin-top: 10px;">
+                                        <div role="button" id="add-fee-earner" class="ms-Button" style="width: auto;">
+                                            <span class="ms-Button-label">+ Add Fee Earner</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <hr style="margin: 30px 0;">
+
+                                <!-- Other Participants Section -->
+                                <h4 class="ms-font-l">Other Participants</h4>
+                                <p class="ms-font-m">Additional participant management options will be available here.</p>
+                                <p class="ms-font-s" style="color: #666; font-style: italic;">Coming soon...</p>
+                            </div>
+                        </div>
+                        
                         <!-- Rules Dropdown Section -->
                         <div class="dropdown-section">
                             <div class="dropdown-header" data-target="rules-content">
