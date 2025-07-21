@@ -173,6 +173,30 @@ b {
     color: white !important;
 }
 
+/* Purple Apply Rules button styling */
+.ms-Button[id="apply-all-rules"] {
+    background-color: #6b46c1 !important;
+    border-color: #6b46c1 !important;
+}
+
+.ms-Button[id="apply-all-rules"]:hover {
+    background-color: #553c9a !important;
+    border-color: #553c9a !important;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    transform: translateY(-1px);
+}
+
+.ms-Button[id="apply-all-rules"]:active {
+    background-color: #4c1d95 !important;
+    border-color: #4c1d95 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    transform: translateY(0);
+}
+
+.ms-Button[id="apply-all-rules"] .ms-Button-label {
+    color: white !important;
+}
+
 /* Tab navigation styling */
 .tab-navigation {
     display: flex;

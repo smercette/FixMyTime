@@ -28,6 +28,7 @@ Office.onReady((info) => {
     document.getElementById("format-spreadsheet").onclick = formatSpreadsheet;
     document.getElementById("add-columns").onclick = addColumns;
     document.getElementById("color-code-rows").onclick = colorCodeRows;
+    document.getElementById("apply-all-rules").onclick = applyAllRules;
 
     // Matter profile functionality
     document.getElementById("save-matter").onclick = saveMatterProfile;
@@ -948,10 +949,11 @@ export async function addColumns() {
         .checked;
       const shouldAddNotes = (document.getElementById("add-notes-column") as HTMLInputElement)
         .checked;
-      
+
       // Also check if Name Standardisation is enabled - if so, we should add Notes column
-      const nameStandardisationEnabled = (document.getElementById("name-standardisation-enabled") as HTMLInputElement)
-        .checked;
+      const nameStandardisationEnabled = (
+        document.getElementById("name-standardisation-enabled") as HTMLInputElement
+      ).checked;
       const shouldAddNotesForRules = shouldAddNotes || nameStandardisationEnabled;
 
       const headerRow = usedRange.values[0];
@@ -2598,16 +2600,13 @@ function updateUndoButtonState() {
   }
 }
 
-// Modified apply function to support undo
-async function applyNameStandardisationToWorksheetWithUndo() {
+// Apply all enabled rules
+async function applyAllRules() {
   try {
     // Get current matter and its rules
     const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
     if (!selectedMatter) {
-      showMessage(
-        "Please select a matter profile before applying name standardisation rules.",
-        "error"
-      );
+      showMessage("Please select a matter profile before applying rules.", "error");
       return;
     }
 
@@ -2618,25 +2617,101 @@ async function applyNameStandardisationToWorksheetWithUndo() {
       return;
     }
 
+    let appliedRules = [];
+    let totalUpdatedRows = 0;
+
+    // Apply Name Standardisation Rule if enabled
+    if (currentProfile.rules.nameStandardisation?.enabled) {
+      showMessage("Applying Name Standardisation rule...", "info");
+
+      const result = await applyNameStandardisationRuleWithResult();
+      if (result.success) {
+        appliedRules.push("Name Standardisation");
+        totalUpdatedRows += result.updatedRows;
+      } else if (result.error) {
+        showMessage(`Name Standardisation failed: ${result.error}`, "error");
+        return;
+      }
+    }
+
+    // Future rules can be added here following the same pattern
+    // if (currentProfile.rules.missingTimeEntries?.enabled) {
+    //   const result = await applyMissingTimeEntriesRule();
+    //   if (result.success) {
+    //     appliedRules.push("Missing Time Entries");
+    //     totalUpdatedRows += result.updatedRows;
+    //   }
+    // }
+
+    // Show final result
+    if (appliedRules.length > 0) {
+      const rulesText = appliedRules.join(", ");
+      showMessage(
+        `Successfully applied ${rulesText}. Updated ${totalUpdatedRows} rows total. Undo is available.`,
+        "success"
+      );
+    } else {
+      showMessage("No rules were enabled for this matter profile.", "info");
+    }
+  } catch (error) {
+    console.error("Error applying rules:", error);
+    showMessage("An error occurred while applying rules: " + error.message, "error");
+  }
+}
+
+// Helper function to apply Name Standardisation and return result
+async function applyNameStandardisationRuleWithResult(): Promise<{
+  success: boolean;
+  updatedRows: number;
+  error?: string;
+}> {
+  try {
+    const updatedCount = await applyNameStandardisationToWorksheetWithUndo();
+    return { success: true, updatedRows: updatedCount };
+  } catch (error) {
+    return { success: false, updatedRows: 0, error: error.message };
+  }
+}
+
+// Modified apply function to support undo
+async function applyNameStandardisationToWorksheetWithUndo(): Promise<number> {
+  try {
+    // Get current matter and its rules
+    const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+    if (!selectedMatter) {
+      showMessage(
+        "Please select a matter profile before applying name standardisation rules.",
+        "error"
+      );
+      return 0;
+    }
+
+    const profiles = getMatterProfiles();
+    const currentProfile = profiles.find((p) => p.name === selectedMatter);
+    if (!currentProfile || !currentProfile.rules) {
+      showMessage("No rules found for the selected matter profile.", "error");
+      return 0;
+    }
+
     const nameRule = currentProfile.rules.nameStandardisation;
     if (!nameRule.enabled) {
       showMessage("Name standardisation rule is not enabled for this matter.", "info");
-      return;
+      return 0;
     }
 
     const feeEarners = currentProfile.feeEarners || [];
     if (feeEarners.length === 0) {
       showMessage("No fee earners found for this matter. Please add fee earners first.", "error");
-      return;
+      return 0;
     }
 
-    await Excel.run(async (context) => {
+    return await Excel.run(async (context) => {
       const worksheet = context.workbook.worksheets.getActiveWorksheet();
       const usedRange = worksheet.getUsedRange();
 
       if (!usedRange) {
         showMessage("No data found in the worksheet to process.", "error");
-        return;
+        return 0;
       }
 
       usedRange.load(["values", "formulas", "rowCount", "columnCount"]);
@@ -2786,10 +2861,13 @@ async function applyNameStandardisationToWorksheetWithUndo() {
       } else {
         showMessage("Name standardisation completed, but no changes were needed.", "info");
       }
+
+      return updatedCount;
     });
   } catch (error) {
     console.error("Error applying name standardisation:", error);
     showMessage("An error occurred while applying name standardisation: " + error.message, "error");
+    return 0;
   }
 }
 

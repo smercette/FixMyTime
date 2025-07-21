@@ -4,7 +4,8 @@
       "Bash(git init:*)",
       "Bash(npm run lint)",
       "Bash(npm run lint:*)",
-      "Bash(npm run build:dev:*)"
+      "Bash(npm run build:dev:*)",
+      "Bash(npx prettier:*)"
     ],
     "deny": []
   }
