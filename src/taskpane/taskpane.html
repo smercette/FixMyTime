@@ -263,6 +263,9 @@
                                 <!-- Fee Earners Section -->
                                 <h4 class="ms-font-l">Fee Earners</h4>
                                 <p class="ms-font-m">Manage fee earner information and billing contacts.</p>
+                                <div id="duplicate-names-info" style="display: none; background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 10px; margin-bottom: 15px;">
+                                    <p class="ms-font-s" style="margin: 0; color: #6c5700;"><strong>⚠️ Duplicate Names Detected:</strong> Rows highlighted in yellow have duplicate first names. Use the "Use as Default" checkbox to specify which entry should be used for name standardisation rules.</p>
+                                </div>
                                 
                                 <div style="margin: 15px 0;">
                                     <div role="button" id="update-from-spreadsheet" class="ms-Button ms-Button--primary" style="margin-bottom: 15px;">
@@ -282,6 +285,7 @@
                                                 <th>Role</th>
                                                 <th>Rate</th>
                                                 <th>Email</th>
+                                                <th>Use as Default</th>
                                                 <th>Billing Contact</th>
                                                 <th>Billing Contact Name</th>
                                                 <th>Billing Contact Email</th>
@@ -341,22 +345,21 @@
                                         <div class="ms-Grid">
                                             <div class="ms-Grid-row">
                                                 <div class="ms-Grid-col ms-sm6">
-                                                    <input type="checkbox" id="case-sensitive" class="ms-Checkbox-input">
-                                                    <label for="case-sensitive" class="ms-Label ms-font-s">Case sensitive matching</label>
-                                                </div>
-                                                <div class="ms-Grid-col ms-sm6">
                                                     <input type="checkbox" id="partial-matches" class="ms-Checkbox-input" checked>
                                                     <label for="partial-matches" class="ms-Label ms-font-s">Allow partial matches (Johnny → John)</label>
                                                 </div>
-                                            </div>
-                                            <div class="ms-Grid-row" style="margin-top: 10px;">
                                                 <div class="ms-Grid-col ms-sm6">
                                                     <input type="checkbox" id="date-matching" class="ms-Checkbox-input" checked>
                                                     <label for="date-matching" class="ms-Label ms-font-s">Use date-based selection (±5 days)</label>
                                                 </div>
+                                            </div>
+                                            <div class="ms-Grid-row" style="margin-top: 10px;">
                                                 <div class="ms-Grid-col ms-sm6">
                                                     <input type="checkbox" id="first-occurrence-only" class="ms-Checkbox-input" checked>
                                                     <label for="first-occurrence-only" class="ms-Label ms-font-s">Replace only first occurrence</label>
+                                                </div>
+                                                <div class="ms-Grid-col ms-sm6">
+                                                    <!-- Empty column for balanced layout -->
                                                 </div>
                                             </div>
                                         </div>

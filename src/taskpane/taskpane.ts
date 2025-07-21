@@ -62,6 +62,9 @@ Office.onReady((info) => {
     
     // Initialize rules with defaults
     loadRulesConfig(getDefaultRules());
+    
+    // Reset table scroll position
+    setTimeout(() => resetTableScroll(), 200);
 
     // Tab switching functionality
     const tabButtons = document.querySelectorAll(".tab-button");
@@ -1147,6 +1150,8 @@ function getCurrentFeeEarners(): FeeEarner[] {
     const billingContactEmailInput = row.querySelector(".billing-contact-email-input") as HTMLInputElement;
 
     if (nameInput && roleInput && rateInput && emailInput && billingContactSelect) {
+      const useAsDefaultCheckbox = row.querySelector(".use-as-default-checkbox") as HTMLInputElement;
+      
       feeEarners.push({
         name: nameInput.value.trim(),
         role: roleInput.value.trim(),
@@ -1155,6 +1160,7 @@ function getCurrentFeeEarners(): FeeEarner[] {
         billingContact: billingContactSelect.value as "Fee Earner" | "Other",
         billingContactName: billingContactNameInput ? billingContactNameInput.value.trim() : "",
         billingContactEmail: billingContactEmailInput ? billingContactEmailInput.value.trim() : "",
+        isDefaultForName: useAsDefaultCheckbox ? useAsDefaultCheckbox.checked : false,
       });
     }
   });
@@ -1175,6 +1181,12 @@ function loadFeeEarnersTable(feeEarners: FeeEarner[]) {
     feeEarners.forEach((feeEarner) => {
       addFeeEarnerRowWithData(feeEarner);
     });
+    
+    // Run duplicate detection after loading all fee earners
+    setTimeout(() => {
+      detectDuplicateNames();
+      resetTableScroll();
+    }, 100);
   }
 }
 
@@ -1203,6 +1215,9 @@ function addFeeEarnerRowWithData(feeEarner: FeeEarner) {
     <td><input type="text" class="role-input" value="${feeEarner.role}" placeholder="Enter role"></td>
     <td><input type="number" class="rate-input" value="${feeEarner.rate || ''}" placeholder="0.00" step="0.01" min="0"></td>
     <td><input type="email" class="email-input" value="${feeEarner.email}" placeholder="Enter email"></td>
+    <td style="text-align: center;">
+      <input type="checkbox" class="use-as-default-checkbox" ${feeEarner.isDefaultForName ? 'checked' : ''}>
+    </td>
     <td>
       <select class="billing-contact-select">
         <option value="Fee Earner" ${feeEarner.billingContact === "Fee Earner" ? "selected" : ""}>Fee Earner</option>
@@ -1227,12 +1242,24 @@ function addFeeEarnerRowWithData(feeEarner: FeeEarner) {
   // Add event listener for billing contact change
   const billingContactSelect = row.querySelector(".billing-contact-select");
   billingContactSelect?.addEventListener("change", handleBillingContactChange);
+  
+  // Add event listeners for duplicate detection and default management
+  const nameInput = row.querySelector(".name-input");
+  const useAsDefaultCheckbox = row.querySelector(".use-as-default-checkbox");
+  
+  nameInput?.addEventListener("input", () => detectDuplicateNames());
+  useAsDefaultCheckbox?.addEventListener("change", (event) => handleDefaultCheckboxChange(event, row));
+  
+  // Ensure scroll container can scroll to the beginning
+  resetTableScroll();
 }
 
 function removeFeeEarnerRow(button: HTMLButtonElement) {
   const row = button.closest("tr");
   if (row) {
     row.remove();
+    // Re-run duplicate detection after removal
+    setTimeout(() => detectDuplicateNames(), 50);
   }
 }
 
@@ -1242,8 +1269,8 @@ function handleBillingContactChange(event: Event) {
   if (!row) return;
 
   const isOther = select.value === "Other";
-  const billingNameCell = row.children[5] as HTMLTableCellElement;
-  const billingEmailCell = row.children[6] as HTMLTableCellElement;
+  const billingNameCell = row.children[6] as HTMLTableCellElement;
+  const billingEmailCell = row.children[7] as HTMLTableCellElement;
   const billingNameInput = billingNameCell.querySelector("input") as HTMLInputElement;
   const billingEmailInput = billingEmailCell.querySelector("input") as HTMLInputElement;
 
@@ -1261,6 +1288,109 @@ function handleBillingContactChange(event: Event) {
     billingEmailInput.disabled = true;
     billingNameInput.value = "";
     billingEmailInput.value = "";
+  }
+}
+
+function detectDuplicateNames() {
+  const tbody = document.getElementById("fee-earners-tbody");
+  if (!tbody) return;
+
+  const rows = Array.from(tbody.querySelectorAll("tr"));
+  const nameGroups = new Map<string, HTMLTableRowElement[]>();
+  let hasDuplicates = false;
+
+  // Group rows by first name (case insensitive)
+  rows.forEach(row => {
+    const nameInput = row.querySelector(".name-input") as HTMLInputElement;
+    if (nameInput && nameInput.value.trim()) {
+      const firstName = nameInput.value.trim().split(' ')[0].toLowerCase();
+      if (!nameGroups.has(firstName)) {
+        nameGroups.set(firstName, []);
+      }
+      nameGroups.get(firstName)!.push(row);
+    }
+  });
+
+  // Apply duplicate styling and manage default checkboxes
+  rows.forEach(row => {
+    const nameInput = row.querySelector(".name-input") as HTMLInputElement;
+    const useAsDefaultCheckbox = row.querySelector(".use-as-default-checkbox") as HTMLInputElement;
+    
+    if (nameInput && nameInput.value.trim()) {
+      const firstName = nameInput.value.trim().split(' ')[0].toLowerCase();
+      const duplicateRows = nameGroups.get(firstName) || [];
+      
+      if (duplicateRows.length > 1) {
+        // This is a duplicate name - highlight the row
+        row.classList.add("duplicate-name");
+        useAsDefaultCheckbox.style.display = "block";
+        hasDuplicates = true;
+        
+        // Ensure only one is marked as default
+        const checkedDefaults = duplicateRows.filter(r => 
+          (r.querySelector(".use-as-default-checkbox") as HTMLInputElement).checked
+        );
+        
+        if (checkedDefaults.length === 0) {
+          // Auto-select the first one as default
+          (duplicateRows[0].querySelector(".use-as-default-checkbox") as HTMLInputElement).checked = true;
+        }
+      } else {
+        // Not a duplicate - remove highlighting and hide checkbox
+        row.classList.remove("duplicate-name");
+        useAsDefaultCheckbox.style.display = "none";
+        useAsDefaultCheckbox.checked = false;
+      }
+    }
+  });
+
+  // Show/hide duplicate names info panel
+  const duplicateNamesInfo = document.getElementById("duplicate-names-info");
+  if (duplicateNamesInfo) {
+    duplicateNamesInfo.style.display = hasDuplicates ? "block" : "none";
+  }
+}
+
+function resetTableScroll() {
+  // Reset horizontal scroll position to beginning
+  const container = document.querySelector('.fee-earners-container') as HTMLElement;
+  if (container) {
+    // Force scroll to leftmost position
+    container.scrollLeft = 0;
+    container.scrollTo({ left: 0, behavior: 'auto' });
+    
+    // Also ensure proper CSS reset
+    container.style.scrollBehavior = 'auto';
+    setTimeout(() => {
+      container.scrollLeft = 0;
+      container.style.scrollBehavior = 'smooth';
+    }, 50);
+  }
+}
+
+function handleDefaultCheckboxChange(event: Event, currentRow: HTMLTableRowElement) {
+  const checkbox = event.target as HTMLInputElement;
+  const nameInput = currentRow.querySelector(".name-input") as HTMLInputElement;
+  
+  if (checkbox.checked && nameInput.value.trim()) {
+    const firstName = nameInput.value.trim().split(' ')[0].toLowerCase();
+    const tbody = document.getElementById("fee-earners-tbody");
+    if (!tbody) return;
+
+    // Uncheck all other default checkboxes for the same first name
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    rows.forEach(row => {
+      if (row !== currentRow) {
+        const rowNameInput = row.querySelector(".name-input") as HTMLInputElement;
+        if (rowNameInput && rowNameInput.value.trim()) {
+          const rowFirstName = rowNameInput.value.trim().split(' ')[0].toLowerCase();
+          if (rowFirstName === firstName) {
+            const rowCheckbox = row.querySelector(".use-as-default-checkbox") as HTMLInputElement;
+            rowCheckbox.checked = false;
+          }
+        }
+      }
+    });
   }
 }
 
@@ -1411,7 +1541,7 @@ function getCurrentRules(): RulesConfig {
   return {
     nameStandardisation: {
       enabled: (document.getElementById("name-standardisation-enabled") as HTMLInputElement).checked,
-      caseSensitive: (document.getElementById("case-sensitive") as HTMLInputElement).checked,
+      caseSensitive: false, // Case sensitivity removed from Stage 1
       allowPartialMatches: (document.getElementById("partial-matches") as HTMLInputElement).checked,
       useDateMatching: (document.getElementById("date-matching") as HTMLInputElement).checked,
       replaceOnlyFirstOccurrence: (document.getElementById("first-occurrence-only") as HTMLInputElement).checked,
@@ -1425,7 +1555,6 @@ function loadRulesConfig(rules: RulesConfig) {
   const nameRule = rules.nameStandardisation;
   
   (document.getElementById("name-standardisation-enabled") as HTMLInputElement).checked = nameRule.enabled;
-  (document.getElementById("case-sensitive") as HTMLInputElement).checked = nameRule.caseSensitive;
   (document.getElementById("partial-matches") as HTMLInputElement).checked = nameRule.allowPartialMatches;
   (document.getElementById("date-matching") as HTMLInputElement).checked = nameRule.useDateMatching;
   (document.getElementById("first-occurrence-only") as HTMLInputElement).checked = nameRule.replaceOnlyFirstOccurrence;

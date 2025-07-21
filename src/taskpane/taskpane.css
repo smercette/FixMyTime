@@ -9,6 +9,8 @@
      height: 100%;
      margin: 0;
      padding: 0;
+     overflow-x: visible;
+     box-sizing: border-box;
  }
  
  ul {
@@ -39,6 +41,9 @@
     -webkit-flex: 1 0 0;
     flex: 1 0 0;
     padding: 10px 20px;
+    overflow-x: visible;
+    width: 100%;
+    box-sizing: border-box;
  }
  
  .ms-welcome__main > h2 {
@@ -247,14 +252,19 @@ b {
 .dropdown-content {
     padding: 20px;
     border-top: 1px solid #e5e5e5;
+    overflow: visible; /* Ensure content can scroll */
 }
 
 /* Participants table styling */
 .participants-table {
-    width: 100%;
+    width: 890px; /* Fixed width matching column totals */
     border-collapse: collapse;
-    margin-top: 10px;
+    margin: 0;
     font-size: 12px;
+    table-layout: fixed;
+    /* Ensure table starts at left edge */
+    position: static;
+    left: 0;
 }
 
 .participants-table th,
@@ -271,6 +281,53 @@ b {
     color: #333;
     white-space: nowrap;
     font-size: 11px;
+}
+
+/* Column width specifications for better layout */
+.participants-table th:nth-child(1), /* Name */
+.participants-table td:nth-child(1) {
+    width: 140px;
+}
+
+.participants-table th:nth-child(2), /* Role */
+.participants-table td:nth-child(2) {
+    width: 100px;
+}
+
+.participants-table th:nth-child(3), /* Rate */
+.participants-table td:nth-child(3) {
+    width: 80px;
+}
+
+.participants-table th:nth-child(4), /* Email */
+.participants-table td:nth-child(4) {
+    width: 140px;
+}
+
+.participants-table th:nth-child(5), /* Use as Default */
+.participants-table td:nth-child(5) {
+    width: 90px;
+    text-align: center;
+}
+
+.participants-table th:nth-child(6), /* Billing Contact */
+.participants-table td:nth-child(6) {
+    width: 100px;
+}
+
+.participants-table th:nth-child(7), /* Billing Contact Name */
+.participants-table td:nth-child(7) {
+    width: 120px;
+}
+
+.participants-table th:nth-child(8), /* Billing Contact Email */
+.participants-table td:nth-child(8) {
+    width: 140px;
+}
+
+.participants-table th:nth-child(9), /* Actions */
+.participants-table td:nth-child(9) {
+    width: 80px;
 }
 
 .participants-table td {
@@ -316,8 +373,15 @@ b {
 }
 
 .fee-earners-container {
-    overflow-x: auto;
+    overflow-x: scroll;
+    overflow-y: visible;
     margin: 15px 0;
+    width: 100%;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+    /* Force scroll to start at left */
+    scroll-behavior: smooth;
+    direction: ltr;
 }
 
 .remove-fee-earner {
@@ -391,4 +455,62 @@ b {
 .rule-config label {
     font-size: 12px;
     margin-bottom: 8px;
+}
+
+/* Duplicate name styling */
+.participants-table tr.duplicate-name {
+    background-color: #fff3cd !important;
+    border-left: 4px solid #ffc107;
+}
+
+.participants-table tr.duplicate-name td {
+    background-color: #fff3cd !important;
+}
+
+.use-as-default-checkbox {
+    display: none;
+    margin: 0;
+    transform: scale(1.1);
+}
+
+.participants-table .duplicate-name .use-as-default-checkbox {
+    display: inline-block;
+}
+
+/* Fix for Office Fabric Grid overflow issues */
+.ms-Grid {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+}
+
+.ms-Grid-row {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+}
+
+.ms-Grid-col {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* Ensure dropdown sections don't get cut off */
+.dropdown-section {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+}
+
+/* Ensure tab content containers are properly sized */
+.tab-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
 }
