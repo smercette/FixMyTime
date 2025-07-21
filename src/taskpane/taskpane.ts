@@ -465,6 +465,9 @@ interface MatterProfile {
   maxColumnWidth: number;
   enableAlternatingRows: boolean;
   verticalAlignment: string;
+  columnHeader: string;
+  columnPosition: string;
+  prepopulateCharge: boolean;
   noChargeKeywords: string;
 }
 
@@ -483,6 +486,9 @@ function getCurrentSettings(): MatterProfile {
     enableAlternatingRows: (document.getElementById("enable-alternating-rows") as HTMLInputElement)
       .checked,
     verticalAlignment: (document.getElementById("vertical-alignment") as HTMLSelectElement).value,
+    columnHeader: (document.getElementById("column-header") as HTMLInputElement).value,
+    columnPosition: (document.getElementById("column-position") as HTMLSelectElement).value,
+    prepopulateCharge: (document.getElementById("prepopulate-charge") as HTMLInputElement).checked,
     noChargeKeywords: (document.getElementById("no-charge-keywords") as HTMLInputElement).value,
   };
 }
@@ -500,8 +506,20 @@ function applySettings(profile: MatterProfile) {
     profile.enableAlternatingRows;
   (document.getElementById("vertical-alignment") as HTMLSelectElement).value =
     profile.verticalAlignment || "center";
+
+  // Apply charge column settings with backward compatibility defaults
+  (document.getElementById("column-header") as HTMLInputElement).value =
+    profile.columnHeader || "Charge";
+  (document.getElementById("column-position") as HTMLSelectElement).value =
+    profile.columnPosition || "next";
+  (document.getElementById("prepopulate-charge") as HTMLInputElement).checked =
+    profile.prepopulateCharge || false;
   (document.getElementById("no-charge-keywords") as HTMLInputElement).value =
     profile.noChargeKeywords;
+
+  // Update prepopulation rules visibility based on checkbox state
+  const rulesDiv = document.getElementById("prepopulate-rules");
+  rulesDiv.style.display = profile.prepopulateCharge || false ? "block" : "none";
 }
 
 function loadMatterProfiles() {
