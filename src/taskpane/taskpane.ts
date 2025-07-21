@@ -1547,21 +1547,7 @@ function isAlreadyFullName(
   narrativeText: string, 
   wordIndex: number
 ): boolean {
-  // Parse the full name to get components
-  const nameParts = fullName.split(/\s+/);
-  if (nameParts.length < 2) {
-    return false; // Not a multi-part name, safe to replace
-  }
-  
-  const firstName = nameParts[0].toLowerCase();
-  const lastName = nameParts[nameParts.length - 1].toLowerCase();
-  
-  // Check if the found word matches the first name
-  if (foundWord.toLowerCase() !== firstName) {
-    return false; // Found word isn't the first name, safe to replace
-  }
-  
-  // Look for the last name after the found word
+  // Look for any word that follows the found word
   // Get text starting from after the found word
   const afterWord = narrativeText.slice(wordIndex + foundWord.length);
   
@@ -1569,15 +1555,59 @@ function isAlreadyFullName(
   const nextWordMatch = afterWord.match(/^\s+(\w+)/);
   
   if (nextWordMatch) {
-    const nextWord = nextWordMatch[1].toLowerCase();
+    const nextWord = nextWordMatch[1];
     
-    // Check if the next word matches the last name
-    if (nextWord === lastName) {
-      return true; // Already a full name, don't replace
+    // Check if the next word looks like a surname (capitalized and not obviously not a name)
+    if (isLikelySurname(nextWord)) {
+      return true; // Already appears to be part of a full name, don't replace
+    }
+    
+    // Additional check: if the fee earner's name matches exactly what we found
+    const nameParts = fullName.split(/\s+/);
+    if (nameParts.length >= 2) {
+      const firstName = nameParts[0].toLowerCase();
+      const lastName = nameParts[nameParts.length - 1].toLowerCase();
+      
+      // Check if found word + next word matches the fee earner's name exactly
+      if (foundWord.toLowerCase() === firstName && nextWord.toLowerCase() === lastName) {
+        return true; // This is exactly the fee earner's full name, don't replace
+      }
     }
   }
   
   return false; // Not a full name, safe to replace
+}
+
+function isLikelySurname(word: string): boolean {
+  // Check if a word is likely to be a surname based on common patterns
+  
+  // Must be capitalized (proper noun)
+  if (word[0] !== word[0].toUpperCase()) {
+    return false;
+  }
+  
+  // Must be at least 2 characters
+  if (word.length < 2) {
+    return false;
+  }
+  
+  // Exclude common words that might be capitalized but aren't surnames
+  const excludedWords = [
+    'THE', 'AND', 'OR', 'BUT', 'FOR', 'NOR', 'SO', 'YET',
+    'IN', 'ON', 'AT', 'TO', 'FROM', 'BY', 'WITH', 'ABOUT',
+    'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY',
+    'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
+    'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER',
+    'THIS', 'THAT', 'THESE', 'THOSE', 'HIS', 'HER', 'THEIR', 'OUR', 'YOUR',
+    'WORKED', 'ATTENDED', 'REVIEWED', 'PREPARED', 'DRAFTED', 'MEETING', 'CALL'
+  ];
+  
+  if (excludedWords.includes(word.toUpperCase())) {
+    return false;
+  }
+  
+  // If it passes these tests, it's likely a surname
+  return true;
 }
 
 function createFeeEarnerNameMap(feeEarners: FeeEarner[], allowPartialMatches: boolean): Map<string, FeeEarner[]> {
