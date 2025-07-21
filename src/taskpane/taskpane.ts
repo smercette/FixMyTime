@@ -28,6 +28,7 @@ Office.onReady((info) => {
     
     // Rules functionality
     document.getElementById("save-rules").onclick = saveRules;
+    document.getElementById("apply-name-rules").onclick = applyNameStandardisationToWorksheet;
     
     // Name Standardisation rule toggle
     const nameStandardisationToggle = document.getElementById("name-standardisation-enabled") as HTMLInputElement;
@@ -1391,6 +1392,436 @@ function handleDefaultCheckboxChange(event: Event, currentRow: HTMLTableRowEleme
         }
       }
     });
+  }
+}
+
+// Stage 3: Core Name Matching Logic
+function applyNameStandardisationRule(worksheetData: any[], feeEarners: FeeEarner[], ruleConfig: NameStandardisationRule): any[] {
+  if (!ruleConfig.enabled || feeEarners.length === 0) {
+    return worksheetData;
+  }
+
+  const processedData = [...worksheetData];
+  
+  processedData.forEach((row, rowIndex) => {
+    // Find the source narrative column (Original Narrative or Narrative)
+    const sourceNarrativeKey = findSourceNarrativeColumn(row);
+    if (!sourceNarrativeKey) return;
+    
+    const narrativeText = row[sourceNarrativeKey];
+    if (!narrativeText || typeof narrativeText !== 'string') return;
+    
+    // Process the narrative text for name standardisation
+    const processedText = processNarrativeForNames(
+      narrativeText, 
+      feeEarners, 
+      ruleConfig,
+      row.Date || row.date || null // Try to get date for matching
+    );
+    
+    // Always update the amended narrative column with the processed text
+    const amendedColumnKey = getOrCreateAmendedNarrativeColumn(row);
+    if (amendedColumnKey) {
+      row[amendedColumnKey] = processedText;
+    }
+  });
+
+  return processedData;
+}
+
+function findSourceNarrativeColumn(row: any): string | null {
+  const keys = Object.keys(row);
+  
+  // First, look for "Original Narrative"
+  const originalNarrative = keys.find(key => 
+    key.toLowerCase().includes('original') && key.toLowerCase().includes('narrative')
+  );
+  if (originalNarrative) return originalNarrative;
+  
+  // Then look for just "Narrative" (but not "Amended Narrative")
+  const narrative = keys.find(key => 
+    key.toLowerCase().includes('narrative') && 
+    !key.toLowerCase().includes('amended') &&
+    !key.toLowerCase().includes('original')
+  );
+  if (narrative) return narrative;
+  
+  // Finally, check for "Description"
+  const description = keys.find(key => 
+    key.toLowerCase().includes('description')
+  );
+  return description || null;
+}
+
+function getOrCreateAmendedNarrativeColumn(row: any): string | null {
+  const keys = Object.keys(row);
+  
+  // Look for existing "Amended Narrative" column
+  const amendedColumn = keys.find(key => 
+    key.toLowerCase().includes('amended') && key.toLowerCase().includes('narrative')
+  );
+  
+  if (amendedColumn) {
+    return amendedColumn;
+  }
+  
+  // If not found, we'll need to create it - return the expected name
+  return 'Amended Narrative';
+}
+
+function processNarrativeForNames(
+  narrativeText: string, 
+  feeEarners: FeeEarner[], 
+  ruleConfig: NameStandardisationRule,
+  rowDate?: string | Date | null
+): string {
+  if (!narrativeText) return narrativeText;
+  
+  let processedText = narrativeText;
+  const excludedNames = ruleConfig.excludedNames.map(name => name.toLowerCase().trim());
+  
+  // Create a map of first names to fee earners for quick lookup
+  const nameMap = createFeeEarnerNameMap(feeEarners, ruleConfig.allowPartialMatches);
+  
+  // Process each word in the narrative
+  let hasReplacements = false;
+  
+  // Split text but keep track of original spacing and punctuation
+  const wordPattern = /\b(\w+)\b/g;
+  let match;
+  
+  while ((match = wordPattern.exec(narrativeText)) !== null) {
+    const word = match[1];
+    const cleanWord = word.toLowerCase();
+    
+    // Skip if word is excluded
+    if (excludedNames.includes(cleanWord)) continue;
+    
+    // Skip if word is too short to be a meaningful name
+    if (cleanWord.length < 2) continue;
+    
+    // Check if this word matches any fee earner names
+    const matchingFeeEarners = findMatchingFeeEarners(cleanWord, nameMap, ruleConfig.allowPartialMatches);
+    
+    if (matchingFeeEarners.length > 0) {
+      // Determine which fee earner to use
+      const selectedFeeEarner = selectBestFeeEarnerMatch(
+        matchingFeeEarners, 
+        rowDate, 
+        ruleConfig.useDateMatching
+      );
+      
+      if (selectedFeeEarner && selectedFeeEarner.name !== word) {
+        // Replace the first name with the full name
+        if (ruleConfig.replaceOnlyFirstOccurrence && hasReplacements) {
+          // Skip if we've already done a replacement and only first occurrence is enabled
+          continue;
+        }
+        
+        // Create a regex that preserves the original case and word boundaries
+        const regex = new RegExp(`\\b${escapeRegExp(word)}\\b`, hasReplacements ? 'g' : '');
+        processedText = processedText.replace(regex, selectedFeeEarner.name);
+        hasReplacements = true;
+        
+        // If only replacing first occurrence, we can stop after the first replacement
+        if (ruleConfig.replaceOnlyFirstOccurrence) {
+          break;
+        }
+      }
+    }
+  }
+  
+  return processedText;
+}
+
+function createFeeEarnerNameMap(feeEarners: FeeEarner[], allowPartialMatches: boolean): Map<string, FeeEarner[]> {
+  const nameMap = new Map<string, FeeEarner[]>();
+  
+  feeEarners.forEach(feeEarner => {
+    if (!feeEarner.name) return;
+    
+    const names = feeEarner.name.split(/\s+/);
+    const firstName = names[0].toLowerCase();
+    
+    // Add the first name to the map
+    if (!nameMap.has(firstName)) {
+      nameMap.set(firstName, []);
+    }
+    nameMap.get(firstName)!.push(feeEarner);
+    
+    // If partial matches are allowed, also add name variations
+    if (allowPartialMatches && feeEarner.nameVariations) {
+      feeEarner.nameVariations.forEach(variation => {
+        const variationKey = variation.toLowerCase().trim();
+        if (!nameMap.has(variationKey)) {
+          nameMap.set(variationKey, []);
+        }
+        nameMap.get(variationKey)!.push(feeEarner);
+      });
+    }
+  });
+  
+  return nameMap;
+}
+
+function findMatchingFeeEarners(
+  searchName: string, 
+  nameMap: Map<string, FeeEarner[]>, 
+  allowPartialMatches: boolean
+): FeeEarner[] {
+  // Direct match
+  if (nameMap.has(searchName)) {
+    return nameMap.get(searchName)!;
+  }
+  
+  // Partial matching if enabled
+  if (allowPartialMatches) {
+    const matches: FeeEarner[] = [];
+    
+    nameMap.forEach((feeEarners, mappedName) => {
+      // Check if the search name is a partial match of the mapped name
+      // or if the mapped name is a partial match of the search name
+      if (mappedName.includes(searchName) || searchName.includes(mappedName)) {
+        matches.push(...feeEarners);
+      }
+    });
+    
+    return matches;
+  }
+  
+  return [];
+}
+
+function selectBestFeeEarnerMatch(
+  matchingFeeEarners: FeeEarner[], 
+  rowDate: string | Date | null, 
+  useDateMatching: boolean
+): FeeEarner | null {
+  if (matchingFeeEarners.length === 0) return null;
+  if (matchingFeeEarners.length === 1) return matchingFeeEarners[0];
+  
+  // If date matching is enabled and we have a date, try to find the best match
+  if (useDateMatching && rowDate) {
+    const parsedRowDate = parseDate(rowDate);
+    if (parsedRowDate) {
+      // Try to find a fee earner with a matching date within ±5 days
+      const dateMatchedFeeEarner = findFeeEarnerByDateRange(matchingFeeEarners, parsedRowDate, 5);
+      if (dateMatchedFeeEarner) {
+        return dateMatchedFeeEarner;
+      }
+    }
+  }
+  
+  // Find the fee earner marked as default for this name group
+  const defaultFeeEarner = matchingFeeEarners.find(fe => fe.isDefaultForName);
+  if (defaultFeeEarner) return defaultFeeEarner;
+  
+  // Fall back to the first one if no default is set
+  return matchingFeeEarners[0];
+}
+
+function findFeeEarnerByDateRange(
+  feeEarners: FeeEarner[], 
+  targetDate: Date, 
+  daysTolerance: number
+): FeeEarner | null {
+  // In a full implementation, this would check against fee earner assignment dates
+  // stored in the fee earner records or a separate tracking system
+  
+  // For now, we'll implement a placeholder that could be extended
+  // to check against actual date records when that functionality is added
+  
+  const targetTime = targetDate.getTime();
+  const toleranceMs = daysTolerance * 24 * 60 * 60 * 1000; // Convert days to milliseconds
+  
+  for (const feeEarner of feeEarners) {
+    // Placeholder: In a real implementation, this would check against
+    // stored dates for when each fee earner was assigned to work
+    // For now, we'll return null to fall back to default logic
+    
+    // Future enhancement: Check feeEarner.assignmentDates or similar
+    // if (feeEarner.assignmentDates) {
+    //   for (const assignmentDate of feeEarner.assignmentDates) {
+    //     const assignmentTime = parseDate(assignmentDate)?.getTime();
+    //     if (assignmentTime && Math.abs(targetTime - assignmentTime) <= toleranceMs) {
+    //       return feeEarner;
+    //     }
+    //   }
+    // }
+  }
+  
+  return null; // No date-based match found, fall back to default logic
+}
+
+// Enhanced date parsing with multiple format support
+function parseDate(dateInput: string | Date): Date | null {
+  if (!dateInput) return null;
+  
+  if (dateInput instanceof Date) return dateInput;
+  
+  // Try multiple date formats
+  const dateString = dateInput.toString().trim();
+  
+  // Common formats to try
+  const formats = [
+    // ISO format
+    /^\d{4}-\d{2}-\d{2}$/,
+    // US format MM/DD/YYYY
+    /^\d{1,2}\/\d{1,2}\/\d{4}$/,
+    // UK format DD/MM/YYYY  
+    /^\d{1,2}\/\d{1,2}\/\d{4}$/,
+    // Short format with dashes
+    /^\d{1,2}-\d{1,2}-\d{4}$/,
+    // Excel date number (if it's a number)
+    /^\d+(\.\d+)?$/
+  ];
+  
+  // Try standard JavaScript Date parsing first
+  let date = new Date(dateString);
+  if (!isNaN(date.getTime())) {
+    return date;
+  }
+  
+  // If that fails, try Excel serial date number conversion
+  const numericValue = parseFloat(dateString);
+  if (!isNaN(numericValue) && numericValue > 40000 && numericValue < 50000) {
+    // Excel serial date (days since January 1, 1900)
+    // Note: Excel incorrectly treats 1900 as a leap year, so we need to adjust
+    const excelEpoch = new Date(1899, 11, 30); // December 30, 1899
+    date = new Date(excelEpoch.getTime() + numericValue * 24 * 60 * 60 * 1000);
+    if (!isNaN(date.getTime())) {
+      return date;
+    }
+  }
+  
+  return null;
+}
+
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Apply name standardisation rules to the current worksheet
+async function applyNameStandardisationToWorksheet() {
+  try {
+    // Get current matter and its rules
+    const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+    if (!selectedMatter) {
+      showMessage("Please select a matter profile before applying name standardisation rules.", "error");
+      return;
+    }
+
+    const profiles = getMatterProfiles();
+    const currentProfile = profiles.find(p => p.name === selectedMatter);
+    if (!currentProfile || !currentProfile.rules) {
+      showMessage("No rules found for the selected matter profile.", "error");
+      return;
+    }
+
+    const nameRule = currentProfile.rules.nameStandardisation;
+    if (!nameRule.enabled) {
+      showMessage("Name standardisation rule is not enabled for this matter.", "info");
+      return;
+    }
+
+    const feeEarners = currentProfile.feeEarners || [];
+    if (feeEarners.length === 0) {
+      showMessage("No fee earners found for this matter. Please add fee earners first.", "error");
+      return;
+    }
+
+    await Excel.run(async (context) => {
+      const worksheet = context.workbook.worksheets.getActiveWorksheet();
+      const usedRange = worksheet.getUsedRange();
+      
+      if (!usedRange) {
+        showMessage("No data found in the worksheet to process.", "error");
+        return;
+      }
+
+      usedRange.load(["values", "formulas", "rowCount", "columnCount"]);
+      await context.sync();
+
+      // Convert Excel data to a workable format
+      const headers = usedRange.values[0] as string[];
+      const worksheetData: any[] = [];
+
+      for (let i = 1; i < usedRange.values.length; i++) {
+        const row = usedRange.values[i];
+        const rowData: any = {};
+        
+        headers.forEach((header, colIndex) => {
+          rowData[header] = row[colIndex];
+        });
+        
+        worksheetData.push(rowData);
+      }
+
+      // Apply name standardisation rules
+      const processedData = applyNameStandardisationRule(worksheetData, feeEarners, nameRule);
+
+      // Update the worksheet with processed data
+      let updatedCount = 0;
+      
+      // First check if "Amended Narrative" column exists
+      let amendedNarrativeCol = headers.findIndex(h => 
+        h.toLowerCase().includes('amended') && h.toLowerCase().includes('narrative')
+      );
+      
+      // If column doesn't exist, we need to check if we need to create it
+      const needsAmendedColumn = amendedNarrativeCol < 0 && 
+        processedData.some(row => row['Amended Narrative'] !== undefined);
+      
+      if (needsAmendedColumn) {
+        // We'll need to add the column after the source narrative column
+        const sourceCol = headers.findIndex(h => 
+          (h.toLowerCase().includes('original') && h.toLowerCase().includes('narrative')) ||
+          (h.toLowerCase().includes('narrative') && !h.toLowerCase().includes('amended'))
+        );
+        
+        if (sourceCol >= 0) {
+          // Insert new column after the source narrative column
+          const insertCol = sourceCol + 1;
+          const newColumn = worksheet.getCell(0, insertCol).getEntireColumn();
+          newColumn.insert(Excel.InsertShiftDirection.right);
+          
+          // Set the header for the new column
+          const headerCell = worksheet.getCell(0, insertCol);
+          headerCell.values = [['Amended Narrative']];
+          
+          // Update our tracking
+          amendedNarrativeCol = insertCol;
+          headers.splice(insertCol, 0, 'Amended Narrative');
+          
+          await context.sync();
+        }
+      }
+      
+      // Now update the data
+      for (let i = 0; i < processedData.length; i++) {
+        const processedRow = processedData[i];
+        const amendedValue = processedRow['Amended Narrative'];
+        
+        if (amendedValue !== undefined && amendedNarrativeCol >= 0) {
+          // Update the cell in Excel (i+1 because row 0 is headers)
+          const cell = worksheet.getCell(i + 1, amendedNarrativeCol);
+          cell.values = [[amendedValue]];
+          updatedCount++;
+        }
+      }
+
+      await context.sync();
+
+      if (updatedCount > 0) {
+        showMessage(`Name standardisation applied successfully. Updated ${updatedCount} rows.`, "success");
+      } else {
+        showMessage("Name standardisation completed, but no changes were needed.", "info");
+      }
+    });
+
+  } catch (error) {
+    console.error("Error applying name standardisation:", error);
+    showMessage("An error occurred while applying name standardisation: " + error.message, "error");
   }
 }
 
