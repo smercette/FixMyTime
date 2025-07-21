@@ -24,6 +24,7 @@ Office.onReady((info) => {
     // Fee Earners functionality
     document.getElementById("add-fee-earner").onclick = () => addFeeEarnerRow();
     document.getElementById("update-from-spreadsheet").onclick = updateFeeEarnersFromSpreadsheet;
+    document.getElementById("save-participants").onclick = saveParticipants;
     
     // Make removeFeeEarnerRow available globally for onclick handlers
     (window as any).removeFeeEarnerRow = removeFeeEarnerRow;
@@ -1308,5 +1309,45 @@ async function updateFeeEarnersFromSpreadsheet() {
   } catch (error) {
     console.error(error);
     showMessage("An error occurred while scanning the spreadsheet: " + error.message, "error");
+  }
+}
+
+function saveParticipants() {
+  const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+
+  if (!selectedMatter) {
+    showMessage(
+      "Please select a matter from the dropdown to save participants to.",
+      "error"
+    );
+    return;
+  }
+
+  // Get current fee earners from the table
+  const currentFeeEarners = getCurrentFeeEarners();
+  
+  // Filter out completely empty rows
+  const validFeeEarners = currentFeeEarners.filter(feeEarner => 
+    feeEarner.name.trim() !== "" || 
+    feeEarner.role.trim() !== "" || 
+    feeEarner.rate > 0 || 
+    feeEarner.email.trim() !== ""
+  );
+
+  // Get existing matter profiles
+  const profiles = getMatterProfiles();
+  const existingIndex = profiles.findIndex((p) => p.name === selectedMatter);
+
+  if (existingIndex >= 0) {
+    // Update the existing profile with new fee earners data
+    profiles[existingIndex].feeEarners = validFeeEarners;
+    saveMatterProfiles(profiles);
+    
+    showMessage(
+      `Successfully saved ${validFeeEarners.length} fee earner${validFeeEarners.length !== 1 ? "s" : ""} to matter profile "${selectedMatter}".`,
+      "success"
+    );
+  } else {
+    showMessage("Selected matter profile not found. Please create a new profile first.", "error");
   }
 }
