@@ -359,8 +359,8 @@ function prepopulateChargeValues(allValues: any[][], narrativeColumnIndex: numbe
     if (narrativeText.trim() === "") {
       chargeValue = "Q";
     }
-    // Check for no-charge keywords
-    else if (noChargeKeywords.some((keyword) => narrativeText.includes(keyword))) {
+    // Check for no-charge keywords at the start of the narrative text
+    else if (noChargeKeywords.some((keyword) => narrativeText.startsWith(keyword))) {
       chargeValue = "N";
     }
     // Otherwise, default to Y (chargeable)
