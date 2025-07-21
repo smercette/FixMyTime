@@ -57,8 +57,8 @@
                                 <span class="ms-Button-label">Format Spreadsheet</span>
                             </div>
                             
-                            <div role="button" id="add-charge-column" class="ms-Button ms-Button--primary" style="width: 100%; margin-bottom: 10px;">
-                                <span class="ms-Button-label">Add Charge Column</span>
+                            <div role="button" id="add-columns" class="ms-Button ms-Button--primary" style="width: 100%; margin-bottom: 10px;">
+                                <span class="ms-Button-label">Add Columns</span>
                             </div>
                             
                             <div role="button" id="color-code-rows" class="ms-Button ms-Button--primary" style="width: 100%; margin-bottom: 10px;">
@@ -219,16 +219,25 @@
                                 
                                 <hr style="margin: 30px 0;">
                                 
-                                <h3 class="ms-font-l">Column Management</h3>
-                                <p class="ms-font-m">Add amended columns and rename existing ones.</p>
+                                <h3 class="ms-font-l">Column Options</h3>
+                                <p class="ms-font-m">Configure which columns to add when using "Add Columns" on the Main tab.</p>
                                 
                                 <div style="margin-top: 15px;">
-                                    <div role="button" id="add-amended-columns" class="ms-Button ms-Button--primary" style="width: 100%; margin-bottom: 10px;">
-                                        <span class="ms-Button-label">Add Amended Narrative & Time Columns</span>
+                                    <div style="margin-bottom: 15px;">
+                                        <input type="checkbox" id="add-amended-narrative" class="ms-Checkbox-input">
+                                        <label for="add-amended-narrative" class="ms-Label">Add Amended Narrative Column</label>
+                                        <p class="ms-font-xs" style="margin-top: 5px; color: #666; margin-left: 20px;">
+                                            Renames existing Narrative to "Original Narrative" and adds "Amended Narrative" to its right.
+                                        </p>
                                     </div>
-                                    <p class="ms-font-xs" style="margin-top: 5px; color: #666;">
-                                        Renames existing Narrative/Time to "Original" and adds "Amended" versions to their right.
-                                    </p>
+                                    
+                                    <div style="margin-bottom: 15px;">
+                                        <input type="checkbox" id="add-amended-time" class="ms-Checkbox-input">
+                                        <label for="add-amended-time" class="ms-Label">Add Amended Time Column</label>
+                                        <p class="ms-font-xs" style="margin-top: 5px; color: #666; margin-left: 20px;">
+                                            Renames existing Time to "Original Time" and adds "Amended Time" to its right.
+                                        </p>
+                                    </div>
                                 </div>
                                 
                                 <hr style="margin: 30px 0;">

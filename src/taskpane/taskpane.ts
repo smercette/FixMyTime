@@ -13,9 +13,8 @@ Office.onReady((info) => {
     document.getElementById("sideload-msg").style.display = "none";
     document.getElementById("app-body").style.display = "flex";
     document.getElementById("format-spreadsheet").onclick = formatSpreadsheet;
-    document.getElementById("add-charge-column").onclick = addChargeColumn;
+    document.getElementById("add-columns").onclick = addColumns;
     document.getElementById("color-code-rows").onclick = colorCodeRows;
-    document.getElementById("add-amended-columns").onclick = addAmendedColumns;
 
     // Matter profile functionality
     document.getElementById("save-matter").onclick = saveMatterProfile;
@@ -196,19 +195,226 @@ export async function formatSpreadsheet() {
   }
 }
 
+async function addChargeColumnInternal(worksheet: Excel.Worksheet, usedRange: Excel.Range) {
+  // Get user inputs
+  const columnHeader =
+    (document.getElementById("column-header") as HTMLInputElement).value || "Charge";
+  const columnPosition = (document.getElementById("column-position") as HTMLSelectElement)
+    .value;
+  const shouldPrepopulate = (document.getElementById("prepopulate-charge") as HTMLInputElement)
+    .checked;
+
+  let targetColumn: Excel.Range;
+  let columnLetter: string;
+
+  if (columnPosition === "next") {
+    // Find the next available column
+    columnLetter = getColumnLetter(usedRange.columnCount + 1);
+    targetColumn = worksheet.getRange(`${columnLetter}:${columnLetter}`);
+  } else {
+    // Use the specified column
+    columnLetter = columnPosition;
+    targetColumn = worksheet.getRange(`${columnLetter}:${columnLetter}`);
+  }
+
+  // Get current matter settings for formatting
+  const headerBgColor = (document.getElementById("header-bg-color") as HTMLInputElement).value;
+  const headerTextColor = (document.getElementById("header-text-color") as HTMLInputElement)
+    .value;
+  const borderColor = (document.getElementById("border-color") as HTMLInputElement).value;
+
+  // Set the header in the first row with matter settings
+  const headerCell = worksheet.getRange(`${columnLetter}1`);
+  headerCell.values = [[columnHeader]];
+  headerCell.format.font.bold = true;
+  headerCell.format.fill.color = headerBgColor;
+  headerCell.format.font.color = headerTextColor;
+  headerCell.format.horizontalAlignment = "Center";
+
+  // Apply borders to header cell
+  const headerBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
+  headerBorderItems.forEach((item) => {
+    headerCell.format.borders.getItem(item).style = "Continuous";
+    headerCell.format.borders.getItem(item).color = borderColor;
+  });
+
+  // Add data validation for the charge column (from row 2 onwards)
+  const dataRange = worksheet.getRange(`${columnLetter}2:${columnLetter}${usedRange.rowCount}`);
+
+  // Apply data validation to restrict to Y, N, or Q
+  dataRange.dataValidation.rule = {
+    list: {
+      inCellDropDown: true,
+      source: "Y,N,Q",
+    },
+  };
+
+  // Apply borders to data cells
+  const dataBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
+  dataBorderItems.forEach((item) => {
+    dataRange.format.borders.getItem(item).style = "Continuous";
+    dataRange.format.borders.getItem(item).color = borderColor;
+  });
+
+  // Set values based on prepopulation setting
+  let values = [];
+  if (shouldPrepopulate) {
+    // Find narrative/description column
+    const narrativeColumnIndex = findNarrativeColumn(usedRange.values[0]);
+
+    if (narrativeColumnIndex !== -1) {
+      values = prepopulateChargeValues(usedRange.values, narrativeColumnIndex);
+    } else {
+      // Default to Q if no narrative column found
+      for (let i = 0; i < usedRange.rowCount - 1; i++) {
+        values.push(["Q"]);
+      }
+      showMessage(
+        "No Narrative/Description column found. Defaulting to 'Q' values.",
+        "warning"
+      );
+    }
+  } else {
+    // Default to "Q" (Query) when not prepopulating
+    for (let i = 0; i < usedRange.rowCount - 1; i++) {
+      values.push(["Q"]);
+    }
+  }
+  dataRange.values = values;
+
+  // Format the data cells
+  dataRange.format.horizontalAlignment = "Center";
+
+  // Apply alternating row colors if enabled
+  const enableAlternatingRows = (
+    document.getElementById("enable-alternating-rows") as HTMLInputElement
+  ).checked;
+  if (enableAlternatingRows) {
+    const altRowColor1 = (document.getElementById("alt-row-color1") as HTMLInputElement).value;
+    const altRowColor2 = (document.getElementById("alt-row-color2") as HTMLInputElement).value;
+
+    // Apply alternating colors to each row in the charge column
+    for (let row = 2; row <= usedRange.rowCount; row++) {
+      const cell = worksheet.getRange(`${columnLetter}${row}`);
+      if (row % 2 === 0) {
+        cell.format.fill.color = altRowColor2; // Even rows
+      } else {
+        cell.format.fill.color = altRowColor1; // Odd rows
+      }
+    }
+  }
+
+  // Auto-fit the column width
+  targetColumn.format.autofitColumns();
+}
+
+async function addChargeColumnAtPosition(worksheet: Excel.Worksheet, usedRange: Excel.Range, columnNumber: number) {
+  // Get user inputs
+  const columnHeader =
+    (document.getElementById("column-header") as HTMLInputElement).value || "Charge";
+  const shouldPrepopulate = (document.getElementById("prepopulate-charge") as HTMLInputElement)
+    .checked;
+
+  // Calculate column letter for the specified position
+  const columnLetter = getColumnLetter(columnNumber);
+  const targetColumn = worksheet.getRange(`${columnLetter}:${columnLetter}`);
+
+  // Get current matter settings for formatting
+  const headerBgColor = (document.getElementById("header-bg-color") as HTMLInputElement).value;
+  const headerTextColor = (document.getElementById("header-text-color") as HTMLInputElement)
+    .value;
+  const borderColor = (document.getElementById("border-color") as HTMLInputElement).value;
+
+  // Set the header in the first row with matter settings
+  const headerCell = worksheet.getRange(`${columnLetter}1`);
+  headerCell.values = [[columnHeader]];
+  headerCell.format.font.bold = true;
+  headerCell.format.fill.color = headerBgColor;
+  headerCell.format.font.color = headerTextColor;
+  headerCell.format.horizontalAlignment = "Center";
+
+  // Apply borders to header cell
+  const headerBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
+  headerBorderItems.forEach((item) => {
+    headerCell.format.borders.getItem(item).style = "Continuous";
+    headerCell.format.borders.getItem(item).color = borderColor;
+  });
+
+  // Add data validation for the charge column (from row 2 onwards)
+  const dataRange = worksheet.getRange(`${columnLetter}2:${columnLetter}${usedRange.rowCount}`);
+
+  // Apply data validation to restrict to Y, N, or Q
+  dataRange.dataValidation.rule = {
+    list: {
+      inCellDropDown: true,
+      source: "Y,N,Q",
+    },
+  };
+
+  // Apply borders to data cells
+  const dataBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
+  dataBorderItems.forEach((item) => {
+    dataRange.format.borders.getItem(item).style = "Continuous";
+    dataRange.format.borders.getItem(item).color = borderColor;
+  });
+
+  // Set values based on prepopulation setting
+  let values = [];
+  if (shouldPrepopulate) {
+    // Find narrative/description column in the updated range
+    const narrativeColumnIndex = findNarrativeColumn(usedRange.values[0]);
+
+    if (narrativeColumnIndex !== -1) {
+      values = prepopulateChargeValues(usedRange.values, narrativeColumnIndex);
+    } else {
+      // Default to Q if no narrative column found
+      for (let i = 0; i < usedRange.rowCount - 1; i++) {
+        values.push(["Q"]);
+      }
+      showMessage(
+        "No Narrative/Description column found. Defaulting to 'Q' values.",
+        "warning"
+      );
+    }
+  } else {
+    // Default to "Q" (Query) when not prepopulating
+    for (let i = 0; i < usedRange.rowCount - 1; i++) {
+      values.push(["Q"]);
+    }
+  }
+  dataRange.values = values;
+
+  // Format the data cells
+  dataRange.format.horizontalAlignment = "Center";
+
+  // Apply alternating row colors if enabled
+  const enableAlternatingRows = (
+    document.getElementById("enable-alternating-rows") as HTMLInputElement
+  ).checked;
+  if (enableAlternatingRows) {
+    const altRowColor1 = (document.getElementById("alt-row-color1") as HTMLInputElement).value;
+    const altRowColor2 = (document.getElementById("alt-row-color2") as HTMLInputElement).value;
+
+    // Apply alternating colors to each row in the charge column
+    for (let row = 2; row <= usedRange.rowCount; row++) {
+      const cell = worksheet.getRange(`${columnLetter}${row}`);
+      if (row % 2 === 0) {
+        cell.format.fill.color = altRowColor2; // Even rows
+      } else {
+        cell.format.fill.color = altRowColor1; // Odd rows
+      }
+    }
+  }
+
+  // Auto-fit the column width
+  targetColumn.format.autofitColumns();
+}
+
 export async function addChargeColumn() {
   try {
     await Excel.run(async (context) => {
       // Get the active worksheet
       const worksheet = context.workbook.worksheets.getActiveWorksheet();
-
-      // Get user inputs
-      const columnHeader =
-        (document.getElementById("column-header") as HTMLInputElement).value || "Charge";
-      const columnPosition = (document.getElementById("column-position") as HTMLSelectElement)
-        .value;
-      const shouldPrepopulate = (document.getElementById("prepopulate-charge") as HTMLInputElement)
-        .checked;
 
       // Get the used range to find the data
       const usedRange = worksheet.getUsedRange();
@@ -221,110 +427,18 @@ export async function addChargeColumn() {
         return;
       }
 
-      let targetColumn: Excel.Range;
-      let columnLetter: string;
-
-      if (columnPosition === "next") {
-        // Find the next available column
-        columnLetter = getColumnLetter(usedRange.columnCount + 1);
-        targetColumn = worksheet.getRange(`${columnLetter}:${columnLetter}`);
-      } else {
-        // Use the specified column
-        columnLetter = columnPosition;
-        targetColumn = worksheet.getRange(`${columnLetter}:${columnLetter}`);
-      }
-
-      // Get current matter settings for formatting
-      const headerBgColor = (document.getElementById("header-bg-color") as HTMLInputElement).value;
-      const headerTextColor = (document.getElementById("header-text-color") as HTMLInputElement)
-        .value;
-      const borderColor = (document.getElementById("border-color") as HTMLInputElement).value;
-
-      // Set the header in the first row with matter settings
-      const headerCell = worksheet.getRange(`${columnLetter}1`);
-      headerCell.values = [[columnHeader]];
-      headerCell.format.font.bold = true;
-      headerCell.format.fill.color = headerBgColor;
-      headerCell.format.font.color = headerTextColor;
-      headerCell.format.horizontalAlignment = "Center";
-
-      // Apply borders to header cell
-      const headerBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
-      headerBorderItems.forEach((item) => {
-        headerCell.format.borders.getItem(item).style = "Continuous";
-        headerCell.format.borders.getItem(item).color = borderColor;
-      });
-
-      // Add data validation for the charge column (from row 2 onwards)
-      const dataRange = worksheet.getRange(`${columnLetter}2:${columnLetter}${usedRange.rowCount}`);
-
-      // Apply data validation to restrict to Y, N, or Q
-      dataRange.dataValidation.rule = {
-        list: {
-          inCellDropDown: true,
-          source: "Y,N,Q",
-        },
-      };
-
-      // Apply borders to data cells
-      const dataBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
-      dataBorderItems.forEach((item) => {
-        dataRange.format.borders.getItem(item).style = "Continuous";
-        dataRange.format.borders.getItem(item).color = borderColor;
-      });
-
-      // Set values based on prepopulation setting
-      let values = [];
-      if (shouldPrepopulate) {
-        // Find narrative/description column
-        const narrativeColumnIndex = findNarrativeColumn(usedRange.values[0]);
-
-        if (narrativeColumnIndex !== -1) {
-          values = prepopulateChargeValues(usedRange.values, narrativeColumnIndex);
-        } else {
-          // Default to Q if no narrative column found
-          for (let i = 0; i < usedRange.rowCount - 1; i++) {
-            values.push(["Q"]);
-          }
-          showMessage(
-            "No Narrative/Description column found. Defaulting to 'Q' values.",
-            "warning"
-          );
-        }
-      } else {
-        // Default to "Q" (Query) when not prepopulating
-        for (let i = 0; i < usedRange.rowCount - 1; i++) {
-          values.push(["Q"]);
-        }
-      }
-      dataRange.values = values;
-
-      // Format the data cells
-      dataRange.format.horizontalAlignment = "Center";
-
-      // Apply alternating row colors if enabled
-      const enableAlternatingRows = (
-        document.getElementById("enable-alternating-rows") as HTMLInputElement
-      ).checked;
-      if (enableAlternatingRows) {
-        const altRowColor1 = (document.getElementById("alt-row-color1") as HTMLInputElement).value;
-        const altRowColor2 = (document.getElementById("alt-row-color2") as HTMLInputElement).value;
-
-        // Apply alternating colors to each row in the charge column
-        for (let row = 2; row <= usedRange.rowCount; row++) {
-          const cell = worksheet.getRange(`${columnLetter}${row}`);
-          if (row % 2 === 0) {
-            cell.format.fill.color = altRowColor2; // Even rows
-          } else {
-            cell.format.fill.color = altRowColor1; // Odd rows
-          }
-        }
-      }
-
-      // Auto-fit the column width
-      targetColumn.format.autofitColumns();
+      await addChargeColumnInternal(worksheet, usedRange);
 
       await context.sync();
+
+      const columnHeader =
+        (document.getElementById("column-header") as HTMLInputElement).value || "Charge";
+      const columnPosition = (document.getElementById("column-position") as HTMLSelectElement)
+        .value;
+      
+      const columnLetter = columnPosition === "next" 
+        ? getColumnLetter(usedRange.columnCount + 1)
+        : columnPosition;
 
       showMessage(
         `Successfully added '${columnHeader}' column at column ${columnLetter} with Y/N/Q options.`,
@@ -489,14 +603,84 @@ export async function colorCodeRows() {
   }
 }
 
-export async function addAmendedColumns() {
+async function addAmendedColumn(
+  worksheet: Excel.Worksheet, 
+  columnIndex: number, 
+  originalName: string, 
+  amendedName: string, 
+  usedRange: Excel.Range,
+  insertionOffsetCount: number
+): Promise<string> {
+  const adjustedIndex = columnIndex + insertionOffsetCount;
+  const columnLetter = getColumnLetter(adjustedIndex + 1);
+  const amendedColumnLetter = getColumnLetter(adjustedIndex + 2);
+
+  // Get current matter settings for formatting
+  const headerBgColor = (document.getElementById("header-bg-color") as HTMLInputElement).value;
+  const headerTextColor = (document.getElementById("header-text-color") as HTMLInputElement).value;
+  const borderColor = (document.getElementById("border-color") as HTMLInputElement).value;
+  const enableAlternatingRows = (document.getElementById("enable-alternating-rows") as HTMLInputElement).checked;
+  const altRowColor1 = (document.getElementById("alt-row-color1") as HTMLInputElement).value;
+  const altRowColor2 = (document.getElementById("alt-row-color2") as HTMLInputElement).value;
+
+  // Rename existing column
+  const originalHeaderCell = worksheet.getRange(`${columnLetter}1`);
+  originalHeaderCell.values = [[originalName]];
+
+  // Insert new column to the right
+  const insertRange = worksheet.getRange(`${amendedColumnLetter}:${amendedColumnLetter}`);
+  insertRange.insert(Excel.InsertShiftDirection.right);
+
+  // Add amended header
+  const amendedHeaderCell = worksheet.getRange(`${amendedColumnLetter}1`);
+  amendedHeaderCell.values = [[amendedName]];
+  amendedHeaderCell.format.font.bold = true;
+  amendedHeaderCell.format.fill.color = headerBgColor;
+  amendedHeaderCell.format.font.color = headerTextColor;
+  amendedHeaderCell.format.horizontalAlignment = "Center";
+
+  // Apply borders to header
+  const headerBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
+  headerBorderItems.forEach((item) => {
+    amendedHeaderCell.format.borders.getItem(item).style = "Continuous";
+    amendedHeaderCell.format.borders.getItem(item).color = borderColor;
+  });
+
+  // Format data cells in the new column
+  const amendedDataRange = worksheet.getRange(`${amendedColumnLetter}2:${amendedColumnLetter}${usedRange.rowCount}`);
+  const dataBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
+  dataBorderItems.forEach((item) => {
+    amendedDataRange.format.borders.getItem(item).style = "Continuous";
+    amendedDataRange.format.borders.getItem(item).color = borderColor;
+  });
+
+  // Apply alternating row colors if enabled
+  if (enableAlternatingRows) {
+    for (let row = 2; row <= usedRange.rowCount; row++) {
+      const cell = worksheet.getRange(`${amendedColumnLetter}${row}`);
+      if (row % 2 === 0) {
+        cell.format.fill.color = altRowColor2;
+      } else {
+        cell.format.fill.color = altRowColor1;
+      }
+    }
+  }
+
+  // Auto-fit column width
+  const amendedColumn = worksheet.getRange(`${amendedColumnLetter}:${amendedColumnLetter}`);
+  amendedColumn.format.autofitColumns();
+
+  return amendedName.split(" ")[1]; // Return "Narrative" or "Time"
+}
+
+export async function addColumns() {
   try {
     await Excel.run(async (context) => {
       // Get the active worksheet
       const worksheet = context.workbook.worksheets.getActiveWorksheet();
 
-      // Get the used range
-      const usedRange = worksheet.getUsedRange();
+      // Get the initial used range
+      let usedRange = worksheet.getUsedRange();
       usedRange.load(["rowCount", "columnCount", "values"]);
 
       await context.sync();
@@ -506,143 +690,81 @@ export async function addAmendedColumns() {
         return;
       }
 
+      // Get user settings
+      const columnHeader = (document.getElementById("column-header") as HTMLInputElement).value.trim();
+      const prepopulateCharge = (document.getElementById("prepopulate-charge") as HTMLInputElement).checked;
+      const shouldAddCharge = columnHeader !== "" || prepopulateCharge;
+      const shouldAddAmendedNarrative = (document.getElementById("add-amended-narrative") as HTMLInputElement).checked;
+      const shouldAddAmendedTime = (document.getElementById("add-amended-time") as HTMLInputElement).checked;
+
       const headerRow = usedRange.values[0];
+      let processedColumns = [];
+      
+      // Find column indices once at the beginning
       const narrativeColumnIndex = findNarrativeColumn(headerRow);
       const timeColumnIndex = findTimeColumn(headerRow);
 
-      if (narrativeColumnIndex === -1 && timeColumnIndex === -1) {
-        showMessage("No Narrative or Time columns found to process.", "error");
-        return;
+      // PHASE 1: Process amended columns (right to left)
+      const columnsToProcess = [];
+      
+      if (shouldAddAmendedNarrative && narrativeColumnIndex !== -1) {
+        columnsToProcess.push({
+          index: narrativeColumnIndex,
+          originalName: "Original Narrative",
+          amendedName: "Amended Narrative",
+          type: "Narrative"
+        });
+      }
+      
+      if (shouldAddAmendedTime && timeColumnIndex !== -1) {
+        columnsToProcess.push({
+          index: timeColumnIndex,
+          originalName: "Original Time", 
+          amendedName: "Amended Time",
+          type: "Time"
+        });
       }
 
-      // Get current matter settings for formatting
-      const headerBgColor = (document.getElementById("header-bg-color") as HTMLInputElement).value;
-      const headerTextColor = (document.getElementById("header-text-color") as HTMLInputElement).value;
-      const borderColor = (document.getElementById("border-color") as HTMLInputElement).value;
-      const enableAlternatingRows = (document.getElementById("enable-alternating-rows") as HTMLInputElement).checked;
-      const altRowColor1 = (document.getElementById("alt-row-color1") as HTMLInputElement).value;
-      const altRowColor2 = (document.getElementById("alt-row-color2") as HTMLInputElement).value;
+      // Sort by column index descending (process rightmost columns first)
+      columnsToProcess.sort((a, b) => b.index - a.index);
 
-      let processedColumns = [];
-
-      // Process Narrative column
-      if (narrativeColumnIndex !== -1) {
-        const narrativeColumnLetter = getColumnLetter(narrativeColumnIndex + 1);
-        const amendedNarrativeColumnLetter = getColumnLetter(narrativeColumnIndex + 2);
-
-        // Rename existing column to "Original Narrative"
-        const originalHeaderCell = worksheet.getRange(`${narrativeColumnLetter}1`);
-        originalHeaderCell.values = [["Original Narrative"]];
-
-        // Insert new column to the right
-        const insertRange = worksheet.getRange(`${amendedNarrativeColumnLetter}:${amendedNarrativeColumnLetter}`);
-        insertRange.insert(Excel.InsertShiftDirection.right);
-
-        // Add "Amended Narrative" header
-        const amendedHeaderCell = worksheet.getRange(`${amendedNarrativeColumnLetter}1`);
-        amendedHeaderCell.values = [["Amended Narrative"]];
-        amendedHeaderCell.format.font.bold = true;
-        amendedHeaderCell.format.fill.color = headerBgColor;
-        amendedHeaderCell.format.font.color = headerTextColor;
-        amendedHeaderCell.format.horizontalAlignment = "Center";
-
-        // Apply borders to header
-        const headerBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
-        headerBorderItems.forEach((item) => {
-          amendedHeaderCell.format.borders.getItem(item).style = "Continuous";
-          amendedHeaderCell.format.borders.getItem(item).color = borderColor;
-        });
-
-        // Format data cells in the new column
-        const amendedDataRange = worksheet.getRange(`${amendedNarrativeColumnLetter}2:${amendedNarrativeColumnLetter}${usedRange.rowCount}`);
-        const dataBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
-        dataBorderItems.forEach((item) => {
-          amendedDataRange.format.borders.getItem(item).style = "Continuous";
-          amendedDataRange.format.borders.getItem(item).color = borderColor;
-        });
-
-        // Apply alternating row colors if enabled
-        if (enableAlternatingRows) {
-          for (let row = 2; row <= usedRange.rowCount; row++) {
-            const cell = worksheet.getRange(`${amendedNarrativeColumnLetter}${row}`);
-            if (row % 2 === 0) {
-              cell.format.fill.color = altRowColor2;
-            } else {
-              cell.format.fill.color = altRowColor1;
-            }
-          }
-        }
-
-        processedColumns.push("Narrative");
+      // Process each amended column
+      for (const column of columnsToProcess) {
+        const columnType = await addAmendedColumn(
+          worksheet,
+          column.index,
+          column.originalName,
+          column.amendedName,
+          usedRange,
+          0 // No offset needed since we process from right to left
+        );
+        processedColumns.push(columnType);
       }
 
-      // Process Time column (adjust index if narrative column was processed)
-      if (timeColumnIndex !== -1) {
-        let adjustedTimeIndex = timeColumnIndex;
-        if (narrativeColumnIndex !== -1 && timeColumnIndex > narrativeColumnIndex) {
-          adjustedTimeIndex = timeColumnIndex + 1; // Account for inserted column
-        }
+      // PHASE 2: Add charge column at the far right (if requested)
+      if (shouldAddCharge) {
+        // After amended columns are added, refresh the used range to get the updated column count
+        usedRange = worksheet.getUsedRange();
+        usedRange.load(["rowCount", "columnCount", "values"]);
+        await context.sync();
 
-        const timeColumnLetter = getColumnLetter(adjustedTimeIndex + 1);
-        const amendedTimeColumnLetter = getColumnLetter(adjustedTimeIndex + 2);
-
-        // Rename existing column to "Original Time"
-        const originalHeaderCell = worksheet.getRange(`${timeColumnLetter}1`);
-        originalHeaderCell.values = [["Original Time"]];
-
-        // Insert new column to the right
-        const insertRange = worksheet.getRange(`${amendedTimeColumnLetter}:${amendedTimeColumnLetter}`);
-        insertRange.insert(Excel.InsertShiftDirection.right);
-
-        // Add "Amended Time" header
-        const amendedHeaderCell = worksheet.getRange(`${amendedTimeColumnLetter}1`);
-        amendedHeaderCell.values = [["Amended Time"]];
-        amendedHeaderCell.format.font.bold = true;
-        amendedHeaderCell.format.fill.color = headerBgColor;
-        amendedHeaderCell.format.font.color = headerTextColor;
-        amendedHeaderCell.format.horizontalAlignment = "Center";
-
-        // Apply borders to header
-        const headerBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
-        headerBorderItems.forEach((item) => {
-          amendedHeaderCell.format.borders.getItem(item).style = "Continuous";
-          amendedHeaderCell.format.borders.getItem(item).color = borderColor;
-        });
-
-        // Format data cells in the new column
-        const amendedDataRange = worksheet.getRange(`${amendedTimeColumnLetter}2:${amendedTimeColumnLetter}${usedRange.rowCount}`);
-        const dataBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
-        dataBorderItems.forEach((item) => {
-          amendedDataRange.format.borders.getItem(item).style = "Continuous";
-          amendedDataRange.format.borders.getItem(item).color = borderColor;
-        });
-
-        // Apply alternating row colors if enabled
-        if (enableAlternatingRows) {
-          for (let row = 2; row <= usedRange.rowCount; row++) {
-            const cell = worksheet.getRange(`${amendedTimeColumnLetter}${row}`);
-            if (row % 2 === 0) {
-              cell.format.fill.color = altRowColor2;
-            } else {
-              cell.format.fill.color = altRowColor1;
-            }
-          }
-        }
-
-        processedColumns.push("Time");
+        // Add charge column at the next available column (far right)
+        await addChargeColumnAtPosition(worksheet, usedRange, usedRange.columnCount + 1);
+        processedColumns.push("Charge");
       }
 
       await context.sync();
 
-      const message = processedColumns.length > 0 
-        ? `Successfully added Amended ${processedColumns.join(" and ")} column${processedColumns.length > 1 ? "s" : ""} and renamed existing column${processedColumns.length > 1 ? "s" : ""} to Original.`
-        : "No columns were processed.";
-      
-      showMessage(message, "success");
+      if (processedColumns.length > 0) {
+        const message = `Successfully added ${processedColumns.join(", ")} column${processedColumns.length > 1 ? "s" : ""}.`;
+        showMessage(message, "success");
+      } else {
+        showMessage("No columns were configured to be added. Please check your settings.", "warning");
+      }
     });
   } catch (error) {
     console.error(error);
-    showMessage("An error occurred while adding amended columns: " + error.message, "error");
+    showMessage("An error occurred while adding columns: " + error.message, "error");
   }
 }
 
@@ -661,6 +783,8 @@ interface MatterProfile {
   columnPosition: string;
   prepopulateCharge: boolean;
   noChargeKeywords: string;
+  addAmendedNarrative: boolean;
+  addAmendedTime: boolean;
 }
 
 function getCurrentSettings(): MatterProfile {
@@ -682,6 +806,8 @@ function getCurrentSettings(): MatterProfile {
     columnPosition: (document.getElementById("column-position") as HTMLSelectElement).value,
     prepopulateCharge: (document.getElementById("prepopulate-charge") as HTMLInputElement).checked,
     noChargeKeywords: (document.getElementById("no-charge-keywords") as HTMLInputElement).value,
+    addAmendedNarrative: (document.getElementById("add-amended-narrative") as HTMLInputElement).checked,
+    addAmendedTime: (document.getElementById("add-amended-time") as HTMLInputElement).checked,
   };
 }
 
@@ -708,6 +834,12 @@ function applySettings(profile: MatterProfile) {
     profile.prepopulateCharge || false;
   (document.getElementById("no-charge-keywords") as HTMLInputElement).value =
     profile.noChargeKeywords;
+
+  // Apply amended column settings with backward compatibility defaults
+  (document.getElementById("add-amended-narrative") as HTMLInputElement).checked =
+    profile.addAmendedNarrative || false;
+  (document.getElementById("add-amended-time") as HTMLInputElement).checked =
+    profile.addAmendedTime || false;
 
   // Update prepopulation rules visibility based on checkbox state
   const rulesDiv = document.getElementById("prepopulate-rules");
