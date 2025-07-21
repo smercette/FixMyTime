@@ -348,3 +348,47 @@ b {
     color: #999;
     cursor: not-allowed;
 }
+
+/* Rules section styling */
+.rule-section {
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #e5e5e5;
+    border-radius: 5px;
+    background-color: white;
+}
+
+.rule-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.rule-header input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+.rule-title {
+    font-weight: 600;
+    font-size: 14px;
+    margin: 0;
+}
+
+.rule-description {
+    color: #666;
+    margin: 0 0 0 24px;
+    font-size: 12px;
+}
+
+.rule-config {
+    margin-left: 24px;
+}
+
+.rule-config input[type="checkbox"] {
+    margin-right: 6px;
+}
+
+.rule-config label {
+    font-size: 12px;
+    margin-bottom: 8px;
+}

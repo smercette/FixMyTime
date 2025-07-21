@@ -93,3 +93,15 @@ No test framework is currently configured. Consider adding Jest or Mocha for uni
 - Data in the following columns should NEVER be changed by the add in: 'Name' 'Date' 'Role' 'Rate'
 - The data in the Narrative and Time / Original Narrative and Original Time columns should also not be changed
 - Any changes that are made by Rules should be done in the Amended Narrative and/or Amended Time columns respectively
+
+## Rules Management
+
+### Rule Creation and Behavior
+- When adding a Rule, it should be added to the Rules dropdown on the Settings tab
+- Rules must be toggleable (on/off functionality)
+- A save button at the bottom of the Rules dropdown should save the Rules to the matter profile
+- When amending 'Time' or 'Narrative', this refers to modifying the 'Amended Time' and/or 'Amended Narrative' columns
+- When adding a rule, carefully consider:
+  - Whether the rule needs to be configurable
+  - If configurable, determine the specific configuration parameters
+  - Ensure the rule's implementation supports toggling and saving to matter profile

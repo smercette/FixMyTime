@@ -26,6 +26,16 @@ Office.onReady((info) => {
     document.getElementById("update-from-spreadsheet").onclick = updateFeeEarnersFromSpreadsheet;
     document.getElementById("save-participants").onclick = saveParticipants;
     
+    // Rules functionality
+    document.getElementById("save-rules").onclick = saveRules;
+    
+    // Name Standardisation rule toggle
+    const nameStandardisationToggle = document.getElementById("name-standardisation-enabled") as HTMLInputElement;
+    nameStandardisationToggle.onchange = () => {
+      const configDiv = document.getElementById("name-standardisation-config");
+      configDiv.style.display = nameStandardisationToggle.checked ? "block" : "none";
+    };
+    
     // Make removeFeeEarnerRow available globally for onclick handlers
     (window as any).removeFeeEarnerRow = removeFeeEarnerRow;
 
@@ -49,6 +59,9 @@ Office.onReady((info) => {
     
     // Initialize fee earners table with one empty row
     loadFeeEarnersTable([]);
+    
+    // Initialize rules with defaults
+    loadRulesConfig(getDefaultRules());
 
     // Tab switching functionality
     const tabButtons = document.querySelectorAll(".tab-button");
@@ -844,6 +857,22 @@ interface FeeEarner {
   billingContact: "Fee Earner" | "Other";
   billingContactName: string;
   billingContactEmail: string;
+  isDefaultForName?: boolean;
+  nameVariations?: string[];
+}
+
+// Rules Management
+interface NameStandardisationRule {
+  enabled: boolean;
+  caseSensitive: boolean;
+  allowPartialMatches: boolean;
+  useDateMatching: boolean;
+  replaceOnlyFirstOccurrence: boolean;
+  excludedNames: string[];
+}
+
+interface RulesConfig {
+  nameStandardisation: NameStandardisationRule;
 }
 
 // Matter Profile Management
@@ -864,6 +893,7 @@ interface MatterProfile {
   addAmendedNarrative: boolean;
   addAmendedTime: boolean;
   feeEarners: FeeEarner[];
+  rules: RulesConfig;
 }
 
 function getCurrentSettings(): MatterProfile {
@@ -888,6 +918,7 @@ function getCurrentSettings(): MatterProfile {
     addAmendedNarrative: (document.getElementById("add-amended-narrative") as HTMLInputElement).checked,
     addAmendedTime: (document.getElementById("add-amended-time") as HTMLInputElement).checked,
     feeEarners: getCurrentFeeEarners(),
+    rules: getCurrentRules(),
   };
 }
 
@@ -924,6 +955,10 @@ function applySettings(profile: MatterProfile) {
   // Apply fee earners settings with backward compatibility defaults
   const feeEarners = profile.feeEarners || [];
   loadFeeEarnersTable(feeEarners);
+
+  // Apply rules settings with backward compatibility defaults
+  const rules = profile.rules || getDefaultRules();
+  loadRulesConfig(rules);
 
   // Update prepopulation rules visibility based on checkbox state
   const rulesDiv = document.getElementById("prepopulate-rules");
@@ -1345,6 +1380,88 @@ function saveParticipants() {
     
     showMessage(
       `Successfully saved ${validFeeEarners.length} fee earner${validFeeEarners.length !== 1 ? "s" : ""} to matter profile "${selectedMatter}".`,
+      "success"
+    );
+  } else {
+    showMessage("Selected matter profile not found. Please create a new profile first.", "error");
+  }
+}
+
+// Rules Management Functions
+function getDefaultRules(): RulesConfig {
+  return {
+    nameStandardisation: {
+      enabled: false,
+      caseSensitive: false,
+      allowPartialMatches: true,
+      useDateMatching: true,
+      replaceOnlyFirstOccurrence: true,
+      excludedNames: []
+    }
+  };
+}
+
+function getCurrentRules(): RulesConfig {
+  const excludedNamesText = (document.getElementById("excluded-names") as HTMLInputElement).value;
+  const excludedNames = excludedNamesText
+    .split(',')
+    .map(name => name.trim())
+    .filter(name => name.length > 0);
+
+  return {
+    nameStandardisation: {
+      enabled: (document.getElementById("name-standardisation-enabled") as HTMLInputElement).checked,
+      caseSensitive: (document.getElementById("case-sensitive") as HTMLInputElement).checked,
+      allowPartialMatches: (document.getElementById("partial-matches") as HTMLInputElement).checked,
+      useDateMatching: (document.getElementById("date-matching") as HTMLInputElement).checked,
+      replaceOnlyFirstOccurrence: (document.getElementById("first-occurrence-only") as HTMLInputElement).checked,
+      excludedNames: excludedNames
+    }
+  };
+}
+
+function loadRulesConfig(rules: RulesConfig) {
+  // Load Name Standardisation rule settings
+  const nameRule = rules.nameStandardisation;
+  
+  (document.getElementById("name-standardisation-enabled") as HTMLInputElement).checked = nameRule.enabled;
+  (document.getElementById("case-sensitive") as HTMLInputElement).checked = nameRule.caseSensitive;
+  (document.getElementById("partial-matches") as HTMLInputElement).checked = nameRule.allowPartialMatches;
+  (document.getElementById("date-matching") as HTMLInputElement).checked = nameRule.useDateMatching;
+  (document.getElementById("first-occurrence-only") as HTMLInputElement).checked = nameRule.replaceOnlyFirstOccurrence;
+  (document.getElementById("excluded-names") as HTMLInputElement).value = nameRule.excludedNames.join(', ');
+
+  // Show/hide configuration based on enabled state
+  const configDiv = document.getElementById("name-standardisation-config");
+  configDiv.style.display = nameRule.enabled ? "block" : "none";
+}
+
+function saveRules() {
+  const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+
+  if (!selectedMatter) {
+    showMessage(
+      "Please select a matter from the dropdown to save rules to.",
+      "error"
+    );
+    return;
+  }
+
+  // Get current rules from the form
+  const currentRules = getCurrentRules();
+
+  // Get existing matter profiles
+  const profiles = getMatterProfiles();
+  const existingIndex = profiles.findIndex((p) => p.name === selectedMatter);
+
+  if (existingIndex >= 0) {
+    // Update the existing profile with new rules data
+    profiles[existingIndex].rules = currentRules;
+    saveMatterProfiles(profiles);
+    
+    const ruleCount = Object.values(currentRules).filter(rule => rule.enabled).length;
+    showMessage(
+      `Successfully saved rules configuration (${ruleCount} rule${ruleCount !== 1 ? "s" : ""} enabled) to matter profile "${selectedMatter}".`,
       "success"
     );
   } else {

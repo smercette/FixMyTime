@@ -325,8 +325,59 @@
                                 <span class="dropdown-arrow">▼</span>
                             </div>
                             <div id="rules-content" class="dropdown-content" style="display: none;">
-                                <p class="ms-font-m">Rule configuration options will be available here.</p>
-                                <p class="ms-font-s" style="color: #666; font-style: italic;">Coming soon...</p>
+                                <p class="ms-font-m">Configure automated data processing rules.</p>
+                                
+                                <!-- Name Standardisation Rule -->
+                                <div class="rule-section">
+                                    <div class="rule-header">
+                                        <input type="checkbox" id="name-standardisation-enabled" class="ms-Checkbox-input">
+                                        <label for="name-standardisation-enabled" class="ms-Label rule-title">Name Standardisation</label>
+                                    </div>
+                                    <p class="ms-font-s rule-description">
+                                        Automatically replace first names in narratives with full names from Fee Earners list.
+                                    </p>
+                                    
+                                    <div id="name-standardisation-config" class="rule-config" style="display: none; margin-top: 15px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
+                                        <div class="ms-Grid">
+                                            <div class="ms-Grid-row">
+                                                <div class="ms-Grid-col ms-sm6">
+                                                    <input type="checkbox" id="case-sensitive" class="ms-Checkbox-input">
+                                                    <label for="case-sensitive" class="ms-Label ms-font-s">Case sensitive matching</label>
+                                                </div>
+                                                <div class="ms-Grid-col ms-sm6">
+                                                    <input type="checkbox" id="partial-matches" class="ms-Checkbox-input" checked>
+                                                    <label for="partial-matches" class="ms-Label ms-font-s">Allow partial matches (Johnny → John)</label>
+                                                </div>
+                                            </div>
+                                            <div class="ms-Grid-row" style="margin-top: 10px;">
+                                                <div class="ms-Grid-col ms-sm6">
+                                                    <input type="checkbox" id="date-matching" class="ms-Checkbox-input" checked>
+                                                    <label for="date-matching" class="ms-Label ms-font-s">Use date-based selection (±5 days)</label>
+                                                </div>
+                                                <div class="ms-Grid-col ms-sm6">
+                                                    <input type="checkbox" id="first-occurrence-only" class="ms-Checkbox-input" checked>
+                                                    <label for="first-occurrence-only" class="ms-Label ms-font-s">Replace only first occurrence</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div style="margin-top: 15px;">
+                                            <label class="ms-Label ms-font-s">Excluded names (comma separated):</label>
+                                            <input id="excluded-names" type="text" class="ms-TextField-field" placeholder="e.g., John, Mike, Admin" style="width: 100%; margin-top: 5px;">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <hr style="margin: 25px 0;">
+                                
+                                <div style="text-align: center;">
+                                    <div role="button" id="save-rules" class="ms-Button ms-Button--primary" style="font-size: 16px; font-weight: 600;">
+                                        <span class="ms-Button-label">Save Rules</span>
+                                    </div>
+                                    <p class="ms-font-xs" style="margin-top: 8px; color: #666;">
+                                        Saves rule configuration to the current matter profile.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                         
