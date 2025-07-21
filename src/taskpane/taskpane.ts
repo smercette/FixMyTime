@@ -1514,6 +1514,11 @@ function processNarrativeForNames(
       );
       
       if (selectedFeeEarner && selectedFeeEarner.name !== word) {
+        // Check if this word is already part of a full name
+        if (isAlreadyFullName(word, selectedFeeEarner.name, narrativeText, match.index!)) {
+          continue; // Skip replacement if it's already a full name
+        }
+        
         // Replace the first name with the full name
         if (ruleConfig.replaceOnlyFirstOccurrence && hasReplacements) {
           // Skip if we've already done a replacement and only first occurrence is enabled
@@ -1534,6 +1539,45 @@ function processNarrativeForNames(
   }
   
   return processedText;
+}
+
+function isAlreadyFullName(
+  foundWord: string, 
+  fullName: string, 
+  narrativeText: string, 
+  wordIndex: number
+): boolean {
+  // Parse the full name to get components
+  const nameParts = fullName.split(/\s+/);
+  if (nameParts.length < 2) {
+    return false; // Not a multi-part name, safe to replace
+  }
+  
+  const firstName = nameParts[0].toLowerCase();
+  const lastName = nameParts[nameParts.length - 1].toLowerCase();
+  
+  // Check if the found word matches the first name
+  if (foundWord.toLowerCase() !== firstName) {
+    return false; // Found word isn't the first name, safe to replace
+  }
+  
+  // Look for the last name after the found word
+  // Get text starting from after the found word
+  const afterWord = narrativeText.slice(wordIndex + foundWord.length);
+  
+  // Use regex to find the next word
+  const nextWordMatch = afterWord.match(/^\s+(\w+)/);
+  
+  if (nextWordMatch) {
+    const nextWord = nextWordMatch[1].toLowerCase();
+    
+    // Check if the next word matches the last name
+    if (nextWord === lastName) {
+      return true; // Already a full name, don't replace
+    }
+  }
+  
+  return false; // Not a full name, safe to replace
 }
 
 function createFeeEarnerNameMap(feeEarners: FeeEarner[], allowPartialMatches: boolean): Map<string, FeeEarner[]> {
