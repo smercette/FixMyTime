@@ -68,6 +68,10 @@
                             <div role="button" id="apply-all-rules" class="ms-Button ms-Button--primary" style="width: 100%; margin-bottom: 10px; background-color: #6b46c1; border-color: #6b46c1;">
                                 <span class="ms-Button-label">Apply Rules</span>
                             </div>
+                            
+                            <div role="button" id="undo-name-rules" class="ms-Button" style="width: 100%; margin-bottom: 10px;" disabled>
+                                <span class="ms-Button-label">Undo Last Application</span>
+                            </div>
                         </div>
                         
                         <div id="message" class="ms-MessageBar" style="display: none; margin-top: 20px;">
@@ -421,18 +425,6 @@
                                             <hr style="margin: 25px 0;">
                                             
                                             <div style="text-align: center;">
-                                                <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 15px;">
-                                                    <div role="button" id="apply-name-rules" class="ms-Button ms-Button--primary" style="font-size: 14px; font-weight: 600;">
-                                                        <span class="ms-Button-label">Apply Name Standardisation</span>
-                                                    </div>
-                                                    <div role="button" id="undo-name-rules" class="ms-Button" style="font-size: 14px; font-weight: 600;" disabled>
-                                                        <span class="ms-Button-label">Undo Last Application</span>
-                                                    </div>
-                                                </div>
-                                                <p class="ms-font-xs" style="margin-bottom: 20px; color: #666;">
-                                                    Apply rules manually or undo the last application.
-                                                </p>
-                                                
                                                 <div role="button" id="save-rules" class="ms-Button ms-Button--primary" style="font-size: 16px; font-weight: 600;">
                                                     <span class="ms-Button-label">Save Rules</span>
                                                 </div>

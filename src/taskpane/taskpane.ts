@@ -42,8 +42,6 @@ Office.onReady((info) => {
 
     // Rules functionality
     document.getElementById("save-rules").onclick = saveRules;
-    document.getElementById("apply-name-rules").onclick =
-      applyNameStandardisationToWorksheetWithUndo;
     document.getElementById("undo-name-rules").onclick = undoNameStandardisation;
 
     // Nickname database functionality
