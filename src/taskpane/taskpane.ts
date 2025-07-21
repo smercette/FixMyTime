@@ -5,6 +5,9 @@
 
 /* global console, document, Excel, Office, HTMLInputElement, HTMLSelectElement, setTimeout, localStorage */
 
+// Track whether a matter is currently loaded
+let currentMatterLoaded: string | null = null;
+
 Office.onReady((info) => {
   if (info.host === Office.HostType.Excel) {
     document.getElementById("sideload-msg").style.display = "none";
@@ -16,6 +19,7 @@ Office.onReady((info) => {
     // Matter profile functionality
     document.getElementById("save-matter").onclick = saveMatterProfile;
     document.getElementById("load-matter").onclick = loadMatterProfile;
+    document.getElementById("change-matter").onclick = changeMatterProfile;
     document.getElementById("delete-matter").onclick = deleteMatterProfile;
     document.getElementById("save-current-settings").onclick = saveCurrentSettings;
 
@@ -486,17 +490,32 @@ function applySettings(profile: MatterProfile) {
 function loadMatterProfiles() {
   const profiles = getMatterProfiles();
   const selectElement = document.getElementById("matter-select") as HTMLSelectElement;
+  const selectElementSettings = document.getElementById(
+    "matter-select-settings"
+  ) as HTMLSelectElement;
 
   // Clear existing options except the first one
   selectElement.innerHTML = '<option value="">-- Select a Matter --</option>';
+  selectElementSettings.innerHTML = '<option value="">-- Select a Matter --</option>';
 
-  // Add saved profiles
+  // Add saved profiles to both dropdowns
   profiles.forEach((profile) => {
     const option = document.createElement("option");
     option.value = profile.name;
     option.textContent = profile.name;
     selectElement.appendChild(option);
+
+    const optionSettings = document.createElement("option");
+    optionSettings.value = profile.name;
+    optionSettings.textContent = profile.name;
+    selectElementSettings.appendChild(optionSettings);
   });
+
+  // If a matter is loaded, update the dropdowns
+  if (currentMatterLoaded) {
+    selectElement.value = currentMatterLoaded;
+    selectElementSettings.value = currentMatterLoaded;
+  }
 }
 
 function getMatterProfiles(): MatterProfile[] {
@@ -536,6 +555,7 @@ function saveMatterProfile() {
   // Clear the input and select the saved matter
   (document.getElementById("new-matter-name") as HTMLInputElement).value = "";
   (document.getElementById("matter-select") as HTMLSelectElement).value = matterName;
+  (document.getElementById("matter-select-settings") as HTMLSelectElement).value = matterName;
 }
 
 function loadMatterProfile() {
@@ -551,7 +571,50 @@ function loadMatterProfile() {
 
   if (profile) {
     applySettings(profile);
+    currentMatterLoaded = selectedMatter;
+
+    // Hide matter selection in main tab
+    document.getElementById("matter-selection-main").style.display = "none";
+
+    // Show current matter display
+    document.getElementById("current-matter-display").style.display = "block";
+    document.getElementById("current-matter-name").textContent = selectedMatter;
+
+    // Show matter selection in settings tab
+    document.getElementById("matter-selection-settings").style.display = "block";
+
+    // Update the settings dropdown to match
+    (document.getElementById("matter-select-settings") as HTMLSelectElement).value = selectedMatter;
+
     showMessage(`Matter profile "${selectedMatter}" loaded successfully.`, "success");
+  } else {
+    showMessage("Matter profile not found.", "error");
+  }
+}
+
+function changeMatterProfile() {
+  const selectedMatter = (document.getElementById("matter-select-settings") as HTMLSelectElement)
+    .value;
+
+  if (!selectedMatter) {
+    showMessage("Please select a matter to load.", "error");
+    return;
+  }
+
+  const profiles = getMatterProfiles();
+  const profile = profiles.find((p) => p.name === selectedMatter);
+
+  if (profile) {
+    applySettings(profile);
+    currentMatterLoaded = selectedMatter;
+
+    // Update the current matter display
+    document.getElementById("current-matter-name").textContent = selectedMatter;
+
+    // Update the main dropdown to match
+    (document.getElementById("matter-select") as HTMLSelectElement).value = selectedMatter;
+
+    showMessage(`Changed to matter profile "${selectedMatter}".`, "success");
   } else {
     showMessage("Matter profile not found.", "error");
   }
@@ -571,6 +634,15 @@ function deleteMatterProfile() {
   if (filteredProfiles.length < profiles.length) {
     saveMatterProfiles(filteredProfiles);
     loadMatterProfiles();
+
+    // If the deleted matter was the currently loaded one, reset the UI
+    if (currentMatterLoaded === selectedMatter) {
+      currentMatterLoaded = null;
+      document.getElementById("matter-selection-main").style.display = "block";
+      document.getElementById("current-matter-display").style.display = "none";
+      document.getElementById("matter-selection-settings").style.display = "none";
+    }
+
     showMessage(`Matter profile "${selectedMatter}" deleted successfully.`, "success");
   } else {
     showMessage("Matter profile not found.", "error");

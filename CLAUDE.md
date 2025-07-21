@@ -69,7 +69,12 @@ Office.onReady((info) => {
 ```
 
 ### Current Implementation
-The template currently only highlights selected cells in yellow. The commands.ts file contains placeholder Outlook code that should be replaced with Excel-specific functionality.
+The add-in now includes:
+- Matter profile management with customizable formatting settings
+- Quick actions (Format Spreadsheet, Add Charge Column, Color Code Rows)
+- Tab-based UI with Main and Settings tabs
+- Dynamic matter selection UI that moves from Main to Settings tab when a matter is loaded
+- Persistent storage of matter profiles using localStorage
 
 ### Testing
 No test framework is currently configured. Consider adding Jest or Mocha for unit tests when implementing features.
