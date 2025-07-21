@@ -61,7 +61,7 @@ Office.onReady((info) => {
       "name-standardisation-enabled"
     ) as HTMLInputElement;
     nameStandardisationToggle.onchange = () => {
-      const configDiv = document.getElementById("name-standardisation-config");
+      const configDiv = document.getElementById("name-standardisation-content");
       configDiv.style.display = nameStandardisationToggle.checked ? "block" : "none";
     };
 
@@ -2654,7 +2654,7 @@ function loadRulesConfig(rules: RulesConfig) {
   loadNicknameDatabase(customNicknames);
 
   // Show/hide configuration based on enabled state
-  const configDiv = document.getElementById("name-standardisation-config");
+  const configDiv = document.getElementById("name-standardisation-content");
   configDiv.style.display = nameRule.enabled ? "block" : "none";
 
   // Show/hide nickname database config

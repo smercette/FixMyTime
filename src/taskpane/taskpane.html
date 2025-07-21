@@ -331,102 +331,105 @@
                             <div id="rules-content" class="dropdown-content" style="display: none;">
                                 <p class="ms-font-m">Configure automated data processing rules.</p>
                                 
-                                <!-- Name Standardisation Rule -->
-                                <div class="rule-section">
-                                    <div class="rule-header">
-                                        <input type="checkbox" id="name-standardisation-enabled" class="ms-Checkbox-input">
-                                        <label for="name-standardisation-enabled" class="ms-Label rule-title">Name Standardisation</label>
+                                <!-- Name Standardisation Rule Section -->
+                                <div class="dropdown-section">
+                                    <div class="dropdown-header" data-target="name-standardisation-content">
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <input type="checkbox" id="name-standardisation-enabled" class="ms-Checkbox-input">
+                                            <h3 class="ms-font-l" style="margin: 0;">Name Standardisation</h3>
+                                        </div>
+                                        <span class="dropdown-arrow">▼</span>
                                     </div>
-                                    <p class="ms-font-s rule-description">
-                                        Automatically replace first names in narratives with full names from Fee Earners list.
-                                    </p>
-                                    
-                                    <div id="name-standardisation-config" class="rule-config" style="display: none; margin-top: 15px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
-                                        <div class="ms-Grid">
-                                            <div class="ms-Grid-row">
-                                                <div class="ms-Grid-col ms-sm6">
-                                                    <input type="checkbox" id="partial-matches" class="ms-Checkbox-input" checked>
-                                                    <label for="partial-matches" class="ms-Label ms-font-s">Allow partial matches (Johnny → John)</label>
-                                                </div>
-                                                <div class="ms-Grid-col ms-sm6">
-                                                    <input type="checkbox" id="date-matching" class="ms-Checkbox-input" checked>
-                                                    <label for="date-matching" class="ms-Label ms-font-s">Use date-based selection (±5 days)</label>
-                                                </div>
-                                            </div>
-                                            <div class="ms-Grid-row" style="margin-top: 10px;">
-                                                <div class="ms-Grid-col ms-sm6">
-                                                    <input type="checkbox" id="first-occurrence-only" class="ms-Checkbox-input" checked>
-                                                    <label for="first-occurrence-only" class="ms-Label ms-font-s">Replace only first occurrence</label>
-                                                </div>
-                                                <div class="ms-Grid-col ms-sm6">
-                                                    <!-- Empty column for balanced layout -->
-                                                </div>
-                                            </div>
-                                        </div>
+                                    <div id="name-standardisation-content" class="dropdown-content" style="display: none;">
+                                        <p class="ms-font-m">Automatically replace first names in narratives with full names from Fee Earners list.</p>
                                         
-                                        <div style="margin-top: 15px;">
-                                            <label class="ms-Label ms-font-s">Excluded names (comma separated):</label>
-                                            <input id="excluded-names" type="text" class="ms-TextField-field" placeholder="e.g., John, Mike, Admin" style="width: 100%; margin-top: 5px;">
-                                        </div>
-                                        
-                                        <div style="margin-top: 15px;">
-                                            <label class="ms-Label ms-font-s">Minimum characters for partial matching:</label>
-                                            <input id="min-partial-match-length" type="number" class="ms-TextField-field" value="3" min="2" max="10" style="width: 100px; margin-top: 5px;">
-                                            <p class="ms-font-xs" style="color: #666; margin-top: 5px;">
-                                                Only words with at least this many characters will be considered for partial matching (prevents "and" matching "Andrew")
-                                            </p>
-                                        </div>
-                                        
-                                        <div style="margin-top: 15px;">
-                                            <input type="checkbox" id="use-nickname-database" class="ms-Checkbox-input" checked>
-                                            <label for="use-nickname-database" class="ms-Label ms-font-s">Use built-in nickname database</label>
-                                            <p class="ms-font-xs" style="color: #666; margin-top: 5px;">
-                                                Automatically matches common nicknames (Bill → William, Bob → Robert, etc.)
-                                            </p>
-                                        </div>
-                                        
-                                        <div id="nickname-database-config" style="margin-top: 15px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
-                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                                <label class="ms-Label ms-font-s" style="font-weight: 600;">Custom Nicknames:</label>
-                                                <div role="button" id="add-nickname" class="ms-Button" style="padding: 4px 8px; font-size: 12px;">
-                                                    <span class="ms-Button-label">+ Add Nickname</span>
+                                        <div style="margin-top: 15px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
+                                            <div class="ms-Grid">
+                                                <div class="ms-Grid-row">
+                                                    <div class="ms-Grid-col ms-sm6">
+                                                        <input type="checkbox" id="partial-matches" class="ms-Checkbox-input" checked>
+                                                        <label for="partial-matches" class="ms-Label ms-font-s">Allow partial matches (Johnny → John)</label>
+                                                    </div>
+                                                    <div class="ms-Grid-col ms-sm6">
+                                                        <input type="checkbox" id="date-matching" class="ms-Checkbox-input" checked>
+                                                        <label for="date-matching" class="ms-Label ms-font-s">Use date-based selection (±5 days)</label>
+                                                    </div>
+                                                </div>
+                                                <div class="ms-Grid-row" style="margin-top: 10px;">
+                                                    <div class="ms-Grid-col ms-sm6">
+                                                        <input type="checkbox" id="first-occurrence-only" class="ms-Checkbox-input" checked>
+                                                        <label for="first-occurrence-only" class="ms-Label ms-font-s">Replace only first occurrence</label>
+                                                    </div>
+                                                    <div class="ms-Grid-col ms-sm6">
+                                                        <!-- Empty column for balanced layout -->
+                                                    </div>
                                                 </div>
                                             </div>
                                             
-                                            <div id="nickname-list" class="nickname-list">
-                                                <!-- Dynamic nickname entries will be inserted here -->
+                                            <div style="margin-top: 15px;">
+                                                <label class="ms-Label ms-font-s">Excluded names (comma separated):</label>
+                                                <input id="excluded-names" type="text" class="ms-TextField-field" placeholder="e.g., John, Mike, Admin" style="width: 100%; margin-top: 5px;">
                                             </div>
                                             
-                                            <div style="margin-top: 10px;">
-                                                <div role="button" id="reset-nicknames" class="ms-Button" style="font-size: 12px;">
-                                                    <span class="ms-Button-label">Reset to Default Nicknames</span>
+                                            <div style="margin-top: 15px;">
+                                                <label class="ms-Label ms-font-s">Minimum characters for partial matching:</label>
+                                                <input id="min-partial-match-length" type="number" class="ms-TextField-field" value="3" min="2" max="10" style="width: 100px; margin-top: 5px;">
+                                                <p class="ms-font-xs" style="color: #666; margin-top: 5px;">
+                                                    Only words with at least this many characters will be considered for partial matching (prevents "and" matching "Andrew")
+                                                </p>
+                                            </div>
+                                            
+                                            <div style="margin-top: 15px;">
+                                                <input type="checkbox" id="use-nickname-database" class="ms-Checkbox-input" checked>
+                                                <label for="use-nickname-database" class="ms-Label ms-font-s">Use built-in nickname database</label>
+                                                <p class="ms-font-xs" style="color: #666; margin-top: 5px;">
+                                                    Automatically matches common nicknames (Bill → William, Bob → Robert, etc.)
+                                                </p>
+                                            </div>
+                                            
+                                            <div id="nickname-database-config" style="margin-top: 15px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
+                                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                                    <label class="ms-Label ms-font-s" style="font-weight: 600;">Custom Nicknames:</label>
+                                                    <div role="button" id="add-nickname" class="ms-Button" style="padding: 4px 8px; font-size: 12px;">
+                                                        <span class="ms-Button-label">+ Add Nickname</span>
+                                                    </div>
                                                 </div>
+                                                
+                                                <div id="nickname-list" class="nickname-list">
+                                                    <!-- Dynamic nickname entries will be inserted here -->
+                                                </div>
+                                                
+                                                <div style="margin-top: 10px;">
+                                                    <div role="button" id="reset-nicknames" class="ms-Button" style="font-size: 12px;">
+                                                        <span class="ms-Button-label">Reset to Default Nicknames</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <hr style="margin: 25px 0;">
+                                            
+                                            <div style="text-align: center;">
+                                                <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 15px;">
+                                                    <div role="button" id="apply-name-rules" class="ms-Button ms-Button--primary" style="font-size: 14px; font-weight: 600;">
+                                                        <span class="ms-Button-label">Apply Name Standardisation</span>
+                                                    </div>
+                                                    <div role="button" id="undo-name-rules" class="ms-Button" style="font-size: 14px; font-weight: 600;" disabled>
+                                                        <span class="ms-Button-label">Undo Last Application</span>
+                                                    </div>
+                                                </div>
+                                                <p class="ms-font-xs" style="margin-bottom: 20px; color: #666;">
+                                                    Apply rules manually or undo the last application.
+                                                </p>
+                                                
+                                                <div role="button" id="save-rules" class="ms-Button ms-Button--primary" style="font-size: 16px; font-weight: 600;">
+                                                    <span class="ms-Button-label">Save Rules</span>
+                                                </div>
+                                                <p class="ms-font-xs" style="margin-top: 8px; color: #666;">
+                                                    Saves rule configuration to the current matter profile.
+                                                </p>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                                
-                                <hr style="margin: 25px 0;">
-                                
-                                <div style="text-align: center;">
-                                    <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 15px;">
-                                        <div role="button" id="apply-name-rules" class="ms-Button ms-Button--primary" style="font-size: 14px; font-weight: 600;">
-                                            <span class="ms-Button-label">Apply Name Standardisation</span>
-                                        </div>
-                                        <div role="button" id="undo-name-rules" class="ms-Button" style="font-size: 14px; font-weight: 600;" disabled>
-                                            <span class="ms-Button-label">Undo Last Application</span>
-                                        </div>
-                                    </div>
-                                    <p class="ms-font-xs" style="margin-bottom: 20px; color: #666;">
-                                        Apply rules manually or undo the last application.
-                                    </p>
-                                    
-                                    <div role="button" id="save-rules" class="ms-Button ms-Button--primary" style="font-size: 16px; font-weight: 600;">
-                                        <span class="ms-Button-label">Save Rules</span>
-                                    </div>
-                                    <p class="ms-font-xs" style="margin-top: 8px; color: #666;">
-                                        Saves rule configuration to the current matter profile.
-                                    </p>
                                 </div>
                             </div>
                         </div>
