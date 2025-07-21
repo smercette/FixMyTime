@@ -90,6 +90,8 @@ export async function formatSpreadsheet() {
       const enableAlternatingRows = (
         document.getElementById("enable-alternating-rows") as HTMLInputElement
       ).checked;
+      const verticalAlignment = (document.getElementById("vertical-alignment") as HTMLSelectElement)
+        .value;
 
       // Format headers (first row)
       const headerRow = usedRange.getRow(0);
@@ -97,6 +99,7 @@ export async function formatSpreadsheet() {
       headerRow.format.fill.color = headerBgColor;
       headerRow.format.font.color = headerTextColor;
       headerRow.format.horizontalAlignment = "Center";
+      headerRow.format.verticalAlignment = verticalAlignment;
 
       // Add borders to entire used range
       const borderItems = [
@@ -142,6 +145,10 @@ export async function formatSpreadsheet() {
           dataRows.format.rowHeight = 30; // Minimum row height for wrapped text
         }
       }
+
+      // Apply vertical alignment to all data rows
+      const dataRows = usedRange.getOffsetRange(1, 0).getResizedRange(usedRange.rowCount - 1, 0);
+      dataRows.format.verticalAlignment = verticalAlignment;
 
       // Apply alternating row colors if enabled (skip header row)
       if (enableAlternatingRows) {
@@ -457,6 +464,7 @@ interface MatterProfile {
   borderColor: string;
   maxColumnWidth: number;
   enableAlternatingRows: boolean;
+  verticalAlignment: string;
   noChargeKeywords: string;
 }
 
@@ -474,6 +482,7 @@ function getCurrentSettings(): MatterProfile {
     ),
     enableAlternatingRows: (document.getElementById("enable-alternating-rows") as HTMLInputElement)
       .checked,
+    verticalAlignment: (document.getElementById("vertical-alignment") as HTMLSelectElement).value,
     noChargeKeywords: (document.getElementById("no-charge-keywords") as HTMLInputElement).value,
   };
 }
@@ -489,6 +498,8 @@ function applySettings(profile: MatterProfile) {
     profile.maxColumnWidth.toString();
   (document.getElementById("enable-alternating-rows") as HTMLInputElement).checked =
     profile.enableAlternatingRows;
+  (document.getElementById("vertical-alignment") as HTMLSelectElement).value =
+    profile.verticalAlignment || "center";
   (document.getElementById("no-charge-keywords") as HTMLInputElement).value =
     profile.noChargeKeywords;
 }
