@@ -56,6 +56,26 @@ Office.onReady((info) => {
         document.getElementById(`${targetTab}-tab`).classList.add("active");
       });
     });
+
+    // Dropdown functionality
+    const dropdownHeaders = document.querySelectorAll(".dropdown-header");
+    dropdownHeaders.forEach((header) => {
+      header.addEventListener("click", () => {
+        const targetId = header.getAttribute("data-target");
+        const content = document.getElementById(targetId);
+        const arrow = header.querySelector(".dropdown-arrow");
+
+        if (content.style.display === "none") {
+          content.style.display = "block";
+          header.classList.remove("collapsed");
+          arrow.textContent = "▼";
+        } else {
+          content.style.display = "none";
+          header.classList.add("collapsed");
+          arrow.textContent = "▶";
+        }
+      });
+    });
   }
 });
 

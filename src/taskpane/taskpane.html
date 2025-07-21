@@ -111,115 +111,135 @@
                             </div>
                         </div>
                         
-                        <h3 class="ms-font-l">Formatting Options</h3>
-                        <p class="ms-font-m">Customize colors and styling for your worksheets.</p>
-                        
-                        <div style="margin-top: 15px;">
-                            <div class="ms-Grid">
-                                <div class="ms-Grid-row">
-                                    <div class="ms-Grid-col ms-sm6">
-                                        <label class="ms-Label ms-font-s">Header Background Color:</label>
-                                        <input id="header-bg-color" type="color" value="#4472C4" style="width: 100%; height: 35px; margin-top: 5px;">
-                                    </div>
-                                    <div class="ms-Grid-col ms-sm6">
-                                        <label class="ms-Label ms-font-s">Header Text Color:</label>
-                                        <input id="header-text-color" type="color" value="#FFFFFF" style="width: 100%; height: 35px; margin-top: 5px;">
+                        <!-- Formatting Dropdown Section -->
+                        <div class="dropdown-section">
+                            <div class="dropdown-header" data-target="formatting-content">
+                                <h3 class="ms-font-l">Formatting</h3>
+                                <span class="dropdown-arrow">▼</span>
+                            </div>
+                            <div id="formatting-content" class="dropdown-content">
+                                <p class="ms-font-m">Customize colors and styling for your worksheets.</p>
+                                
+                                <div style="margin-top: 15px;">
+                                    <div class="ms-Grid">
+                                        <div class="ms-Grid-row">
+                                            <div class="ms-Grid-col ms-sm6">
+                                                <label class="ms-Label ms-font-s">Header Background Color:</label>
+                                                <input id="header-bg-color" type="color" value="#4472C4" style="width: 100%; height: 35px; margin-top: 5px;">
+                                            </div>
+                                            <div class="ms-Grid-col ms-sm6">
+                                                <label class="ms-Label ms-font-s">Header Text Color:</label>
+                                                <input id="header-text-color" type="color" value="#FFFFFF" style="width: 100%; height: 35px; margin-top: 5px;">
+                                            </div>
+                                        </div>
+                                        <div class="ms-Grid-row" style="margin-top: 15px;">
+                                            <div class="ms-Grid-col ms-sm6">
+                                                <label class="ms-Label ms-font-s">Alternating Row Color 1:</label>
+                                                <input id="alt-row-color1" type="color" value="#FFFFFF" style="width: 100%; height: 35px; margin-top: 5px;">
+                                            </div>
+                                            <div class="ms-Grid-col ms-sm6">
+                                                <label class="ms-Label ms-font-s">Alternating Row Color 2:</label>
+                                                <input id="alt-row-color2" type="color" value="#F8F9FA" style="width: 100%; height: 35px; margin-top: 5px;">
+                                            </div>
+                                        </div>
+                                        <div class="ms-Grid-row" style="margin-top: 15px;">
+                                            <div class="ms-Grid-col ms-sm6">
+                                                <label class="ms-Label ms-font-s">Border Color:</label>
+                                                <input id="border-color" type="color" value="#D1D5DB" style="width: 100%; height: 35px; margin-top: 5px;">
+                                            </div>
+                                            <div class="ms-Grid-col ms-sm6">
+                                                <label class="ms-Label ms-font-s">Max Column Width (pts):</label>
+                                                <input id="max-column-width" type="number" value="300" min="100" max="1000" style="width: 100%; height: 35px; margin-top: 5px;">
+                                            </div>
+                                        </div>
+                                        <div class="ms-Grid-row" style="margin-top: 15px;">
+                                            <div class="ms-Grid-col ms-sm6">
+                                                <label class="ms-Label ms-font-s">Vertical Alignment:</label>
+                                                <select id="vertical-alignment" class="ms-Dropdown" style="width: 100%; padding: 8px; margin-top: 5px;">
+                                                    <option value="top">Top</option>
+                                                    <option value="center" selected>Middle</option>
+                                                    <option value="bottom">Bottom</option>
+                                                </select>
+                                            </div>
+                                            <div class="ms-Grid-col ms-sm6">
+                                                <input type="checkbox" id="enable-alternating-rows" class="ms-Checkbox-input" checked style="margin-top: 25px;">
+                                                <label for="enable-alternating-rows" class="ms-Label ms-font-s">Enable alternating row colors</label>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="ms-Grid-row" style="margin-top: 15px;">
-                                    <div class="ms-Grid-col ms-sm6">
-                                        <label class="ms-Label ms-font-s">Alternating Row Color 1:</label>
-                                        <input id="alt-row-color1" type="color" value="#FFFFFF" style="width: 100%; height: 35px; margin-top: 5px;">
+                                
+                                <hr style="margin: 30px 0;">
+                                
+                                <h3 class="ms-font-l">Charge Column Settings</h3>
+                                <p class="ms-font-m">Configure how the charge column behaves.</p>
+                                
+                                <div style="margin-top: 15px;">
+                                    <div class="ms-TextField">
+                                        <label class="ms-Label">Column Header (default: "Charge")</label>
+                                        <input id="column-header" type="text" class="ms-TextField-field" placeholder="Charge" value="Charge">
                                     </div>
-                                    <div class="ms-Grid-col ms-sm6">
-                                        <label class="ms-Label ms-font-s">Alternating Row Color 2:</label>
-                                        <input id="alt-row-color2" type="color" value="#F8F9FA" style="width: 100%; height: 35px; margin-top: 5px;">
-                                    </div>
-                                </div>
-                                <div class="ms-Grid-row" style="margin-top: 15px;">
-                                    <div class="ms-Grid-col ms-sm6">
-                                        <label class="ms-Label ms-font-s">Border Color:</label>
-                                        <input id="border-color" type="color" value="#D1D5DB" style="width: 100%; height: 35px; margin-top: 5px;">
-                                    </div>
-                                    <div class="ms-Grid-col ms-sm6">
-                                        <label class="ms-Label ms-font-s">Max Column Width (pts):</label>
-                                        <input id="max-column-width" type="number" value="300" min="100" max="1000" style="width: 100%; height: 35px; margin-top: 5px;">
-                                    </div>
-                                </div>
-                                <div class="ms-Grid-row" style="margin-top: 15px;">
-                                    <div class="ms-Grid-col ms-sm6">
-                                        <label class="ms-Label ms-font-s">Vertical Alignment:</label>
-                                        <select id="vertical-alignment" class="ms-Dropdown" style="width: 100%; padding: 8px; margin-top: 5px;">
-                                            <option value="top">Top</option>
-                                            <option value="center" selected>Middle</option>
-                                            <option value="bottom">Bottom</option>
+                                    
+                                    <div style="margin-top: 15px;">
+                                        <label class="ms-Label">Insert at column:</label>
+                                        <select id="column-position" class="ms-Dropdown" style="width: 100%; padding: 8px;">
+                                            <option value="next">Next available column</option>
+                                            <option value="A">A</option>
+                                            <option value="B">B</option>
+                                            <option value="C">C</option>
+                                            <option value="D">D</option>
+                                            <option value="E">E</option>
+                                            <option value="F">F</option>
+                                            <option value="G">G</option>
+                                            <option value="H">H</option>
+                                            <option value="I">I</option>
+                                            <option value="J">J</option>
                                         </select>
                                     </div>
-                                    <div class="ms-Grid-col ms-sm6">
-                                        <input type="checkbox" id="enable-alternating-rows" class="ms-Checkbox-input" checked style="margin-top: 25px;">
-                                        <label for="enable-alternating-rows" class="ms-Label ms-font-s">Enable alternating row colors</label>
+                                    
+                                    <div style="margin-top: 15px;">
+                                        <input type="checkbox" id="prepopulate-charge" class="ms-Checkbox-input">
+                                        <label for="prepopulate-charge" class="ms-Label">Prepopulate based on Narrative/Description column</label>
+                                    </div>
+                                    
+                                    <div id="prepopulate-rules" style="display: none; margin-top: 15px; padding: 15px; background-color: #f5f5f5;">
+                                        <p class="ms-font-s"><strong>Prepopulation Rules:</strong></p>
+                                        <div style="margin-top: 10px;">
+                                            <label class="ms-Label ms-font-s">Keywords for 'N' (No Charge) - comma separated:</label>
+                                            <input id="no-charge-keywords" type="text" class="ms-TextField-field" placeholder="NC, DO NOT CHARGE, Non Chargeable" value="NC, DO NOT CHARGE, Non Chargeable">
+                                        </div>
+                                        <p class="ms-font-xs" style="margin-top: 15px;">
+                                            <strong>Logic:</strong><br>
+                                            • If text starts with any No Charge keyword → 'N' (No)<br>
+                                            • Otherwise → 'Y' (Yes)<br>
+                                            • Empty cells → 'Q' (Query)
+                                        </p>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-                        
-                        <hr style="margin: 30px 0;">
-                        
-                        <h3 class="ms-font-l">Charge Column Settings</h3>
-                        <p class="ms-font-m">Configure how the charge column behaves.</p>
-                        
-                        <div style="margin-top: 15px;">
-                            <div class="ms-TextField">
-                                <label class="ms-Label">Column Header (default: "Charge")</label>
-                                <input id="column-header" type="text" class="ms-TextField-field" placeholder="Charge" value="Charge">
-                            </div>
-                            
-                            <div style="margin-top: 15px;">
-                                <label class="ms-Label">Insert at column:</label>
-                                <select id="column-position" class="ms-Dropdown" style="width: 100%; padding: 8px;">
-                                    <option value="next">Next available column</option>
-                                    <option value="A">A</option>
-                                    <option value="B">B</option>
-                                    <option value="C">C</option>
-                                    <option value="D">D</option>
-                                    <option value="E">E</option>
-                                    <option value="F">F</option>
-                                    <option value="G">G</option>
-                                    <option value="H">H</option>
-                                    <option value="I">I</option>
-                                    <option value="J">J</option>
-                                </select>
-                            </div>
-                            
-                            <div style="margin-top: 15px;">
-                                <input type="checkbox" id="prepopulate-charge" class="ms-Checkbox-input">
-                                <label for="prepopulate-charge" class="ms-Label">Prepopulate based on Narrative/Description column</label>
-                            </div>
-                            
-                            <div id="prepopulate-rules" style="display: none; margin-top: 15px; padding: 15px; background-color: #f5f5f5;">
-                                <p class="ms-font-s"><strong>Prepopulation Rules:</strong></p>
-                                <div style="margin-top: 10px;">
-                                    <label class="ms-Label ms-font-s">Keywords for 'N' (No Charge) - comma separated:</label>
-                                    <input id="no-charge-keywords" type="text" class="ms-TextField-field" placeholder="NC, DO NOT CHARGE, Non Chargeable" value="NC, DO NOT CHARGE, Non Chargeable">
+                                
+                                <hr style="margin: 30px 0;">
+                                
+                                <div style="text-align: center;">
+                                    <div role="button" id="save-current-settings" class="ms-Button ms-Button--primary" style="width: 100%; font-size: 16px; font-weight: 600;">
+                                        <span class="ms-Button-label">Save Current Settings</span>
+                                    </div>
+                                    <p class="ms-font-xs" style="margin-top: 8px; color: #666;">
+                                        Updates the selected matter profile with current settings.
+                                    </p>
                                 </div>
-                                <p class="ms-font-xs" style="margin-top: 15px;">
-                                    <strong>Logic:</strong><br>
-                                    • If text starts with any No Charge keyword → 'N' (No)<br>
-                                    • Otherwise → 'Y' (Yes)<br>
-                                    • Empty cells → 'Q' (Query)
-                                </p>
                             </div>
                         </div>
                         
-                        <hr style="margin: 30px 0;">
-                        
-                        <div style="text-align: center;">
-                            <div role="button" id="save-current-settings" class="ms-Button ms-Button--primary" style="width: 100%; font-size: 16px; font-weight: 600;">
-                                <span class="ms-Button-label">Save Current Settings</span>
+                        <!-- Rules Dropdown Section -->
+                        <div class="dropdown-section">
+                            <div class="dropdown-header" data-target="rules-content">
+                                <h3 class="ms-font-l">Rules</h3>
+                                <span class="dropdown-arrow">▼</span>
                             </div>
-                            <p class="ms-font-xs" style="margin-top: 8px; color: #666;">
-                                Updates the selected matter profile with current settings.
-                            </p>
+                            <div id="rules-content" class="dropdown-content" style="display: none;">
+                                <p class="ms-font-m">Rule configuration options will be available here.</p>
+                                <p class="ms-font-s" style="color: #666; font-style: italic;">Coming soon...</p>
+                            </div>
                         </div>
                         
                         <hr style="margin: 30px 0;">
