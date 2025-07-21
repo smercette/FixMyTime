@@ -560,6 +560,144 @@ function findNameColumn(headerRow: any[]): number {
   return -1;
 }
 
+function findNotesColumn(headerRow: any[]): number {
+  const notesKeywords = ["notes", "note", "rules applied", "tracking"];
+
+  for (let i = 0; i < headerRow.length; i++) {
+    if (headerRow[i]) {
+      const headerText = headerRow[i].toString().toLowerCase();
+      if (notesKeywords.some((keyword) => headerText.includes(keyword))) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
+
+async function createNotesColumn(worksheet: Excel.Worksheet, insertAfterColumn: number) {
+  // Insert new column
+  const insertColumn = worksheet.getCell(0, insertAfterColumn + 1).getEntireColumn();
+  insertColumn.insert(Excel.InsertShiftDirection.right);
+
+  // Set header
+  const headerCell = worksheet.getCell(0, insertAfterColumn + 1);
+  headerCell.values = [["Notes"]];
+
+  // Apply header formatting
+  const profiles = getMatterProfiles();
+  const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+  const currentProfile = profiles.find((p) => p.name === selectedMatter);
+
+  if (currentProfile) {
+    const headerBgColor = currentProfile.headerBgColor || "#4472C4";
+    const headerTextColor = currentProfile.headerTextColor || "#FFFFFF";
+    const borderColor = currentProfile.borderColor || "#D1D5DB";
+
+    headerCell.format.fill.color = headerBgColor;
+    headerCell.format.font.color = headerTextColor;
+    headerCell.format.font.bold = true;
+    headerCell.format.horizontalAlignment = "Center";
+    headerCell.format.verticalAlignment = "Center";
+
+    // Apply borders
+    const borderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
+    borderItems.forEach((item) => {
+      headerCell.format.borders.getItem(item).style = "Continuous";
+      headerCell.format.borders.getItem(item).color = borderColor;
+    });
+  }
+
+  return insertAfterColumn + 1;
+}
+
+async function createNotesColumnWithFormatting(worksheet: Excel.Worksheet, usedRange: Excel.Range) {
+  const insertAfterColumn = usedRange.columnCount - 1;
+
+  // Insert new column at the far right
+  const insertColumn = worksheet.getCell(0, usedRange.columnCount).getEntireColumn();
+  insertColumn.insert(Excel.InsertShiftDirection.right);
+
+  const notesColumnIndex = usedRange.columnCount;
+
+  // Set header
+  const headerCell = worksheet.getCell(0, notesColumnIndex);
+  headerCell.values = [["Notes"]];
+
+  // Apply formatting that matches the current matter profile
+  const profiles = getMatterProfiles();
+  const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+  const currentProfile = profiles.find((p) => p.name === selectedMatter);
+
+  if (currentProfile) {
+    const headerBgColor = currentProfile.headerBgColor || "#4472C4";
+    const headerTextColor = currentProfile.headerTextColor || "#FFFFFF";
+    const borderColor = currentProfile.borderColor || "#D1D5DB";
+    const altRowColor1 = currentProfile.altRowColor1 || "#FFFFFF";
+    const altRowColor2 = currentProfile.altRowColor2 || "#F8F9FA";
+    const enableAlternatingRows = currentProfile.enableAlternatingRows !== false;
+    const verticalAlignment = currentProfile.verticalAlignment || "center";
+
+    // Format header
+    headerCell.format.fill.color = headerBgColor;
+    headerCell.format.font.color = headerTextColor;
+    headerCell.format.font.bold = true;
+    headerCell.format.horizontalAlignment = "Center";
+    headerCell.format.verticalAlignment =
+      verticalAlignment === "center" ? "Center" : verticalAlignment === "top" ? "Top" : "Bottom";
+
+    // Apply header borders
+    const borderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
+    borderItems.forEach((item) => {
+      headerCell.format.borders.getItem(item).style = "Continuous";
+      headerCell.format.borders.getItem(item).color = borderColor;
+    });
+
+    // Format data cells (rows 2 onwards)
+    if (usedRange.rowCount > 1) {
+      const dataRange = worksheet.getRangeByIndexes(1, notesColumnIndex, usedRange.rowCount - 1, 1);
+
+      // Apply borders to all data cells
+      borderItems.forEach((item) => {
+        dataRange.format.borders.getItem(item).style = "Continuous";
+        dataRange.format.borders.getItem(item).color = borderColor;
+      });
+
+      // Apply vertical alignment
+      dataRange.format.verticalAlignment =
+        verticalAlignment === "center" ? "Center" : verticalAlignment === "top" ? "Top" : "Bottom";
+      dataRange.format.horizontalAlignment = "Left";
+
+      // Apply alternating row colors if enabled
+      if (enableAlternatingRows) {
+        for (let row = 1; row < usedRange.rowCount; row++) {
+          const cell = worksheet.getCell(row, notesColumnIndex);
+          if (row % 2 === 0) {
+            cell.format.fill.color = altRowColor2;
+          } else {
+            cell.format.fill.color = altRowColor1;
+          }
+        }
+      }
+    }
+  }
+
+  return notesColumnIndex;
+}
+
+function addNoteToRow(notes: string, newNote: string): string {
+  if (!notes || notes.trim() === "") {
+    return newNote;
+  }
+
+  // Check if note already exists to avoid duplicates
+  const existingNotes = notes.split(",").map((n) => n.trim());
+  if (existingNotes.includes(newNote)) {
+    return notes; // Note already exists
+  }
+
+  return notes + ", " + newNote;
+}
+
 function findRoleColumn(headerRow: any[]): number {
   const roleKeywords = ["role", "title", "position", "grade", "level", "rank"];
 
@@ -808,6 +946,13 @@ export async function addColumns() {
       ).checked;
       const shouldAddAmendedTime = (document.getElementById("add-amended-time") as HTMLInputElement)
         .checked;
+      const shouldAddNotes = (document.getElementById("add-notes-column") as HTMLInputElement)
+        .checked;
+      
+      // Also check if Name Standardisation is enabled - if so, we should add Notes column
+      const nameStandardisationEnabled = (document.getElementById("name-standardisation-enabled") as HTMLInputElement)
+        .checked;
+      const shouldAddNotesForRules = shouldAddNotes || nameStandardisationEnabled;
 
       const headerRow = usedRange.values[0];
       let processedColumns = [];
@@ -863,6 +1008,26 @@ export async function addColumns() {
         // Add charge column at the next available column (far right)
         await addChargeColumnAtPosition(worksheet, usedRange, usedRange.columnCount + 1);
         processedColumns.push("Charge");
+      }
+
+      // PHASE 3: Add Notes column at the far right (if requested or if Name Standardisation is enabled)
+      if (shouldAddNotesForRules) {
+        // After charge column is added, refresh the used range to get the updated column count
+        usedRange = worksheet.getUsedRange();
+        usedRange.load(["rowCount", "columnCount", "values"]);
+        await context.sync();
+
+        // Check if Notes column already exists
+        const updatedHeaderRow = usedRange.values[0];
+        const existingNotesIndex = findNotesColumn(updatedHeaderRow);
+
+        if (existingNotesIndex === -1) {
+          // Create Notes column at the far right with full formatting
+          await createNotesColumnWithFormatting(worksheet, usedRange);
+          processedColumns.push("Notes");
+        } else {
+          showMessage("Notes column already exists in the worksheet.", "info");
+        }
       }
 
       // Final auto-fit pass to ensure all columns are properly sized
@@ -1041,6 +1206,7 @@ interface MatterProfile {
   noChargeKeywords: string;
   addAmendedNarrative: boolean;
   addAmendedTime: boolean;
+  addNotesColumn: boolean;
   feeEarners: FeeEarner[];
   rules: RulesConfig;
 }
@@ -1067,6 +1233,7 @@ function getCurrentSettings(): MatterProfile {
     addAmendedNarrative: (document.getElementById("add-amended-narrative") as HTMLInputElement)
       .checked,
     addAmendedTime: (document.getElementById("add-amended-time") as HTMLInputElement).checked,
+    addNotesColumn: (document.getElementById("add-notes-column") as HTMLInputElement).checked,
     feeEarners: getCurrentFeeEarners(),
     rules: getCurrentRules(),
   };
@@ -1101,6 +1268,8 @@ function applySettings(profile: MatterProfile) {
     profile.addAmendedNarrative || false;
   (document.getElementById("add-amended-time") as HTMLInputElement).checked =
     profile.addAmendedTime || false;
+  (document.getElementById("add-notes-column") as HTMLInputElement).checked =
+    profile.addNotesColumn || false;
 
   // Apply fee earners settings with backward compatibility defaults
   const feeEarners = profile.feeEarners || [];
@@ -2533,7 +2702,7 @@ async function applyNameStandardisationToWorksheetWithUndo() {
         }
       }
 
-      // Now update the data and track changes
+      // First, update the Amended Narrative data
       for (let i = 0; i < processedData.length; i++) {
         const processedRow = processedData[i];
         const amendedValue = processedRow["Amended Narrative"];
@@ -2555,6 +2724,48 @@ async function applyNameStandardisationToWorksheetWithUndo() {
             const cell = worksheet.getCell(i + 1, amendedNarrativeCol);
             cell.values = [[amendedValue]];
             updatedCount++;
+          }
+        }
+      }
+
+      // Sync the amended narrative changes before adding notes
+      await context.sync();
+
+      // Find Notes column (should exist if Name Standardisation is enabled)
+      let notesCol = findNotesColumn(headers);
+
+      // Now add notes for rows that were changed
+      for (let i = 0; i < processedData.length; i++) {
+        const processedRow = processedData[i];
+        const amendedValue = processedRow["Amended Narrative"];
+
+        if (amendedValue !== undefined && amendedNarrativeCol >= 0 && notesCol >= 0) {
+          // Check if this row had changes
+          const hadChanges = undoSnapshot.changes.some(
+            (change) => change.row === i + 1 && change.column === amendedNarrativeCol
+          );
+
+          if (hadChanges) {
+            // Get current Notes cell value
+            const notesCell = worksheet.getCell(i + 1, notesCol);
+            notesCell.load("values");
+            await context.sync();
+
+            const existingNotes = notesCell.values[0][0]?.toString() || "";
+            const updatedNotes = addNoteToRow(existingNotes, "Name Standardised");
+
+            if (updatedNotes !== existingNotes) {
+              // Track Notes column change for undo
+              undoSnapshot.changes.push({
+                row: i + 1,
+                column: notesCol,
+                oldValue: existingNotes,
+                newValue: updatedNotes,
+              });
+
+              // Update the Notes cell
+              notesCell.values = [[updatedNotes]];
+            }
           }
         }
       }

@@ -75,6 +75,9 @@ The add-in now includes:
 - Tab-based UI with Main and Settings tabs
 - Dynamic matter selection UI that moves from Main to Settings tab when a matter is loaded
 - Persistent storage of matter profiles using localStorage
+- **Name Standardisation Rule**: Automatically expands first names to full names based on Fee Earners list
+- **Notes Column**: Tracks which rules have been applied to each row (e.g., "Name Standardised")
+- **Undo Functionality**: Allows reverting Name Standardisation rule applications
 
 ### Testing
 No test framework is currently configured. Consider adding Jest or Mocha for unit tests when implementing features.
@@ -105,3 +108,4 @@ No test framework is currently configured. Consider adding Jest or Mocha for uni
   - Whether the rule needs to be configurable
   - If configurable, determine the specific configuration parameters
   - Ensure the rule's implementation supports toggling and saving to matter profile
+- When adding Rules, please follow the approach for Name Standardisation (dropdown with a checkbox shows in the Rules dropdown).
