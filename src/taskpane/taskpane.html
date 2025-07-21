@@ -368,6 +368,14 @@
                                             <label class="ms-Label ms-font-s">Excluded names (comma separated):</label>
                                             <input id="excluded-names" type="text" class="ms-TextField-field" placeholder="e.g., John, Mike, Admin" style="width: 100%; margin-top: 5px;">
                                         </div>
+                                        
+                                        <div style="margin-top: 15px;">
+                                            <label class="ms-Label ms-font-s">Minimum characters for partial matching:</label>
+                                            <input id="min-partial-match-length" type="number" class="ms-TextField-field" value="3" min="2" max="10" style="width: 100px; margin-top: 5px;">
+                                            <p class="ms-font-xs" style="color: #666; margin-top: 5px;">
+                                                Only words with at least this many characters will be considered for partial matching (prevents "and" matching "Andrew")
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                                 

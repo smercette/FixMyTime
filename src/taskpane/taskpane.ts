@@ -873,6 +873,7 @@ interface NameStandardisationRule {
   useDateMatching: boolean;
   replaceOnlyFirstOccurrence: boolean;
   excludedNames: string[];
+  minPartialMatchLength?: number; // Optional for backward compatibility
 }
 
 interface RulesConfig {
@@ -1419,9 +1420,9 @@ function applyNameStandardisationRule(worksheetData: any[], feeEarners: FeeEarne
       row.Date || row.date || null // Try to get date for matching
     );
     
-    // Always update the amended narrative column with the processed text
+    // Only update the amended narrative column if changes were made
     const amendedColumnKey = getOrCreateAmendedNarrativeColumn(row);
-    if (amendedColumnKey) {
+    if (amendedColumnKey && processedText !== narrativeText) {
       row[amendedColumnKey] = processedText;
     }
   });
@@ -1501,7 +1502,8 @@ function processNarrativeForNames(
     if (cleanWord.length < 2) continue;
     
     // Check if this word matches any fee earner names
-    const matchingFeeEarners = findMatchingFeeEarners(cleanWord, nameMap, ruleConfig.allowPartialMatches);
+    const minLength = ruleConfig.minPartialMatchLength || 3; // Default to 3 if not set
+    const matchingFeeEarners = findMatchingFeeEarners(cleanWord, nameMap, ruleConfig.allowPartialMatches, minLength);
     
     if (matchingFeeEarners.length > 0) {
       // Determine which fee earner to use
@@ -1567,7 +1569,8 @@ function createFeeEarnerNameMap(feeEarners: FeeEarner[], allowPartialMatches: bo
 function findMatchingFeeEarners(
   searchName: string, 
   nameMap: Map<string, FeeEarner[]>, 
-  allowPartialMatches: boolean
+  allowPartialMatches: boolean,
+  minPartialMatchLength: number = 3
 ): FeeEarner[] {
   // Direct match
   if (nameMap.has(searchName)) {
@@ -1577,16 +1580,26 @@ function findMatchingFeeEarners(
   // Partial matching if enabled
   if (allowPartialMatches) {
     const matches: FeeEarner[] = [];
+    const uniqueFeeEarners = new Set<FeeEarner>();
     
     nameMap.forEach((feeEarners, mappedName) => {
-      // Check if the search name is a partial match of the mapped name
-      // or if the mapped name is a partial match of the search name
-      if (mappedName.includes(searchName) || searchName.includes(mappedName)) {
-        matches.push(...feeEarners);
+      // For partial matching, we want to be more careful:
+      // 1. Both names should meet minimum length requirement
+      // 2. Only match prefixes, not arbitrary substrings
+      
+      if (searchName.length >= minPartialMatchLength && mappedName.length >= minPartialMatchLength) {
+        // Check if search name is a prefix of mapped name (e.g., "John" matches "Johnny")
+        if (mappedName.startsWith(searchName)) {
+          feeEarners.forEach(fe => uniqueFeeEarners.add(fe));
+        }
+        // Check if mapped name is a prefix of search name (e.g., "Johnny" typed, "John" in system)
+        else if (searchName.startsWith(mappedName)) {
+          feeEarners.forEach(fe => uniqueFeeEarners.add(fe));
+        }
       }
     });
     
-    return matches;
+    return Array.from(uniqueFeeEarners);
   }
   
   return [];
@@ -1957,7 +1970,8 @@ function getDefaultRules(): RulesConfig {
       allowPartialMatches: true,
       useDateMatching: true,
       replaceOnlyFirstOccurrence: true,
-      excludedNames: []
+      excludedNames: [],
+      minPartialMatchLength: 3
     }
   };
 }
@@ -1969,6 +1983,11 @@ function getCurrentRules(): RulesConfig {
     .map(name => name.trim())
     .filter(name => name.length > 0);
 
+  const minPartialMatchLength = parseInt(
+    (document.getElementById("min-partial-match-length") as HTMLInputElement).value || "3",
+    10
+  );
+
   return {
     nameStandardisation: {
       enabled: (document.getElementById("name-standardisation-enabled") as HTMLInputElement).checked,
@@ -1976,7 +1995,8 @@ function getCurrentRules(): RulesConfig {
       allowPartialMatches: (document.getElementById("partial-matches") as HTMLInputElement).checked,
       useDateMatching: (document.getElementById("date-matching") as HTMLInputElement).checked,
       replaceOnlyFirstOccurrence: (document.getElementById("first-occurrence-only") as HTMLInputElement).checked,
-      excludedNames: excludedNames
+      excludedNames: excludedNames,
+      minPartialMatchLength: minPartialMatchLength
     }
   };
 }
@@ -1990,6 +2010,7 @@ function loadRulesConfig(rules: RulesConfig) {
   (document.getElementById("date-matching") as HTMLInputElement).checked = nameRule.useDateMatching;
   (document.getElementById("first-occurrence-only") as HTMLInputElement).checked = nameRule.replaceOnlyFirstOccurrence;
   (document.getElementById("excluded-names") as HTMLInputElement).value = nameRule.excludedNames.join(', ');
+  (document.getElementById("min-partial-match-length") as HTMLInputElement).value = (nameRule.minPartialMatchLength || 3).toString();
 
   // Show/hide configuration based on enabled state
   const configDiv = document.getElementById("name-standardisation-config");
