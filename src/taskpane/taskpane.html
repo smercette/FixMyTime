@@ -48,29 +48,6 @@
                             <p class="ms-font-m" id="current-matter-name" style="margin: 0; font-weight: 600; color: #0078d4;"></p>
                         </div>
                         
-                        <div id="matter-selection-main">
-                            <h3 class="ms-font-l">Matter Selection</h3>
-                            <p class="ms-font-m">Select a matter profile to load your saved settings.</p>
-                            
-                            <div class="ms-Grid" style="margin-top: 15px;">
-                                <div class="ms-Grid-row">
-                                    <div class="ms-Grid-col ms-sm8">
-                                        <label class="ms-Label">Select Matter:</label>
-                                        <select id="matter-select" class="ms-Dropdown" style="width: 100%; padding: 8px;">
-                                            <option value="">-- Select a Matter --</option>
-                                        </select>
-                                    </div>
-                                    <div class="ms-Grid-col ms-sm4">
-                                        <label class="ms-Label" style="visibility: hidden;">Action</label>
-                                        <div role="button" id="load-matter" class="ms-Button ms-Button--primary" style="width: 100%;">
-                                            <span class="ms-Button-label">Load</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <hr style="margin: 30px 0;">
-                        </div>
                         
                         <h3 class="ms-font-l">Quick Actions</h3>
                         <p class="ms-font-m">Perform common tasks on your worksheet.</p>
@@ -94,35 +71,24 @@
                                 <div class="ms-MessageBar-text" id="message-text"></div>
                             </div>
                         </div>
+                        
+                        <!-- Matter Selection at Bottom -->
+                        <div id="matter-selection-bottom" style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e1e1e1;">
+                            <div class="ms-Grid">
+                                <div class="ms-Grid-row">
+                                    <div class="ms-Grid-col ms-sm12">
+                                        <label class="ms-Label ms-font-s">Matter Profile:</label>
+                                        <select id="matter-select" class="ms-Dropdown" style="width: 100%; padding: 8px;">
+                                            <option value="">-- Select a Matter --</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     
                     <!-- Settings Tab Content -->
                     <div id="settings-tab" class="tab-content">
-                        <!-- Change Matter Section (hidden by default) -->
-                        <div id="matter-selection-settings" style="display: none;">
-                            <h3 class="ms-font-l">Change Matter</h3>
-                            <p class="ms-font-m">Select a different matter profile to load.</p>
-                            
-                            <div class="ms-Grid" style="margin-top: 15px;">
-                                <div class="ms-Grid-row">
-                                    <div class="ms-Grid-col ms-sm8">
-                                        <label class="ms-Label">Current Matter:</label>
-                                        <select id="matter-select-settings" class="ms-Dropdown" style="width: 100%; padding: 8px;">
-                                            <option value="">-- Select a Matter --</option>
-                                        </select>
-                                    </div>
-                                    <div class="ms-Grid-col ms-sm4">
-                                        <label class="ms-Label" style="visibility: hidden;">Action</label>
-                                        <div role="button" id="change-matter" class="ms-Button ms-Button--primary" style="width: 100%;">
-                                            <span class="ms-Button-label">Change</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <hr style="margin: 30px 0;">
-                        </div>
-                        
                         <h3 class="ms-font-l">Matter Profile Management</h3>
                         <p class="ms-font-m">Create, update, and delete matter profiles.</p>
                         
