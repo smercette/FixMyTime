@@ -73,6 +73,9 @@ Office.onReady((info) => {
     matterSelect.onchange = () => {
       if (matterSelect.value) {
         loadMatterProfile();
+      } else {
+        // Hide Quick Actions section when no matter is selected
+        document.getElementById("quick-actions-section").style.display = "none";
       }
     };
 
@@ -1362,6 +1365,9 @@ function loadMatterProfile() {
     // Show current matter display
     document.getElementById("current-matter-display").style.display = "block";
     document.getElementById("current-matter-name").textContent = selectedMatter;
+
+    // Show Quick Actions section now that a matter is selected
+    document.getElementById("quick-actions-section").style.display = "block";
 
     showMessage(`Matter profile "${selectedMatter}" loaded successfully.`, "success");
   } else {

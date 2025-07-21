@@ -90,86 +90,89 @@
                 </div>
               </div>
 
-              <!-- Current Matter Display -->
-              <div
-                id="current-matter-display"
-                style="
-                  display: none;
-                  margin-bottom: 20px;
-                  padding: 15px;
-                  background-color: #f0f0f0;
-                  border-radius: 5px;
-                "
-              >
-                <h3 class="ms-font-l" style="margin: 0 0 5px 0">Current Matter</h3>
-                <p
-                  class="ms-font-m"
-                  id="current-matter-name"
-                  style="margin: 0; font-weight: 600; color: #0078d4"
-                ></p>
-              </div>
-
-              <h3 class="ms-font-l">Quick Actions</h3>
-              <p class="ms-font-m">
-                Perform common tasks on your worksheet. Select a matter profile above first.
-              </p>
-
-              <div style="margin-top: 15px">
+              <!-- Quick Actions Section - Hidden by default until matter is selected -->
+              <div id="quick-actions-section" style="display: none;">
+                <!-- Current Matter Display -->
                 <div
-                  role="button"
-                  id="format-spreadsheet"
-                  class="ms-Button ms-Button--primary"
-                  style="width: 100%; margin-bottom: 10px"
-                >
-                  <span class="ms-Button-label">Format Spreadsheet</span>
-                </div>
-
-                <div
-                  role="button"
-                  id="add-columns"
-                  class="ms-Button ms-Button--primary"
-                  style="width: 100%; margin-bottom: 10px"
-                >
-                  <span class="ms-Button-label">Add Columns</span>
-                </div>
-
-                <div
-                  role="button"
-                  id="color-code-rows"
-                  class="ms-Button ms-Button--primary"
-                  style="width: 100%; margin-bottom: 10px"
-                >
-                  <span class="ms-Button-label">Color Code Rows</span>
-                </div>
-
-                <div
-                  role="button"
-                  id="apply-all-rules"
-                  class="ms-Button ms-Button--primary"
+                  id="current-matter-display"
                   style="
-                    width: 100%;
-                    margin-bottom: 10px;
-                    background-color: #6b46c1;
-                    border-color: #6b46c1;
+                    display: block;
+                    margin-bottom: 20px;
+                    padding: 15px;
+                    background-color: #f0f0f0;
+                    border-radius: 5px;
                   "
                 >
-                  <span class="ms-Button-label">Apply Rules</span>
+                  <h3 class="ms-font-l" style="margin: 0 0 5px 0">Current Matter</h3>
+                  <p
+                    class="ms-font-m"
+                    id="current-matter-name"
+                    style="margin: 0; font-weight: 600; color: #0078d4"
+                  ></p>
                 </div>
 
-                <div
-                  role="button"
-                  id="undo-name-rules"
-                  class="ms-Button"
-                  style="width: 100%; margin-bottom: 10px"
-                  disabled
-                >
-                  <span class="ms-Button-label">Undo Last Application</span>
-                </div>
-              </div>
+                <h3 class="ms-font-l">Quick Actions</h3>
+                <p class="ms-font-m">
+                  Perform common tasks on your worksheet using the selected matter profile.
+                </p>
 
-              <div id="message" class="ms-MessageBar" style="display: none; margin-top: 20px">
-                <div class="ms-MessageBar-content">
-                  <div class="ms-MessageBar-text" id="message-text"></div>
+                <div style="margin-top: 15px">
+                  <div
+                    role="button"
+                    id="format-spreadsheet"
+                    class="ms-Button ms-Button--primary"
+                    style="width: 100%; margin-bottom: 10px"
+                  >
+                    <span class="ms-Button-label">Format Spreadsheet</span>
+                  </div>
+
+                  <div
+                    role="button"
+                    id="add-columns"
+                    class="ms-Button ms-Button--primary"
+                    style="width: 100%; margin-bottom: 10px"
+                  >
+                    <span class="ms-Button-label">Add Columns</span>
+                  </div>
+
+                  <div
+                    role="button"
+                    id="color-code-rows"
+                    class="ms-Button ms-Button--primary"
+                    style="width: 100%; margin-bottom: 10px"
+                  >
+                    <span class="ms-Button-label">Color Code Rows</span>
+                  </div>
+
+                  <div
+                    role="button"
+                    id="apply-all-rules"
+                    class="ms-Button ms-Button--primary"
+                    style="
+                      width: 100%;
+                      margin-bottom: 10px;
+                      background-color: #6b46c1;
+                      border-color: #6b46c1;
+                    "
+                  >
+                    <span class="ms-Button-label">Apply Rules</span>
+                  </div>
+
+                  <div
+                    role="button"
+                    id="undo-name-rules"
+                    class="ms-Button"
+                    style="width: 100%; margin-bottom: 10px"
+                    disabled
+                  >
+                    <span class="ms-Button-label">Undo Last Application</span>
+                  </div>
+                </div>
+
+                <div id="message" class="ms-MessageBar" style="display: none; margin-top: 20px">
+                  <div class="ms-MessageBar-content">
+                    <div class="ms-MessageBar-text" id="message-text"></div>
+                  </div>
                 </div>
               </div>
             </div>
