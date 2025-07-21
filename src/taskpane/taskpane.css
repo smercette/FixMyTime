@@ -514,3 +514,75 @@ b {
     overflow: visible !important;
     box-sizing: border-box !important;
 }
+
+/* Nickname database styling */
+.nickname-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #e5e5e5;
+    border-radius: 4px;
+    background-color: white;
+}
+
+.nickname-entry {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    border-bottom: 1px solid #f5f5f5;
+    gap: 10px;
+}
+
+.nickname-entry:last-child {
+    border-bottom: none;
+}
+
+.nickname-entry input {
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    padding: 4px 6px;
+    font-size: 12px;
+    flex: 1;
+}
+
+.nickname-entry input:focus {
+    outline: 2px solid #0078d4;
+    outline-offset: -2px;
+}
+
+.nickname-arrow {
+    color: #666;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.nickname-remove {
+    background-color: #d13438;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    padding: 4px 6px;
+    cursor: pointer;
+    font-size: 10px;
+    min-width: 50px;
+}
+
+.nickname-remove:hover {
+    background-color: #b91c1c;
+}
+
+.nickname-entry.built-in {
+    background-color: #f8f9fa;
+}
+
+.nickname-entry.built-in input {
+    background-color: #f8f9fa;
+    border-color: #e9ecef;
+}
+
+.nickname-entry.built-in .nickname-remove {
+    background-color: #6c757d;
+}
+
+.nickname-entry.built-in .nickname-remove:hover {
+    background-color: #5a6268;
+}

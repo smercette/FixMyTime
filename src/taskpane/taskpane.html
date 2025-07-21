@@ -376,17 +376,49 @@
                                                 Only words with at least this many characters will be considered for partial matching (prevents "and" matching "Andrew")
                                             </p>
                                         </div>
+                                        
+                                        <div style="margin-top: 15px;">
+                                            <input type="checkbox" id="use-nickname-database" class="ms-Checkbox-input" checked>
+                                            <label for="use-nickname-database" class="ms-Label ms-font-s">Use built-in nickname database</label>
+                                            <p class="ms-font-xs" style="color: #666; margin-top: 5px;">
+                                                Automatically matches common nicknames (Bill → William, Bob → Robert, etc.)
+                                            </p>
+                                        </div>
+                                        
+                                        <div id="nickname-database-config" style="margin-top: 15px; padding: 15px; background-color: #f9f9f9; border-radius: 4px;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                                <label class="ms-Label ms-font-s" style="font-weight: 600;">Custom Nicknames:</label>
+                                                <div role="button" id="add-nickname" class="ms-Button" style="padding: 4px 8px; font-size: 12px;">
+                                                    <span class="ms-Button-label">+ Add Nickname</span>
+                                                </div>
+                                            </div>
+                                            
+                                            <div id="nickname-list" class="nickname-list">
+                                                <!-- Dynamic nickname entries will be inserted here -->
+                                            </div>
+                                            
+                                            <div style="margin-top: 10px;">
+                                                <div role="button" id="reset-nicknames" class="ms-Button" style="font-size: 12px;">
+                                                    <span class="ms-Button-label">Reset to Default Nicknames</span>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 
                                 <hr style="margin: 25px 0;">
                                 
                                 <div style="text-align: center;">
-                                    <div role="button" id="apply-name-rules" class="ms-Button ms-Button--primary" style="font-size: 16px; font-weight: 600; margin-bottom: 15px;">
-                                        <span class="ms-Button-label">Apply Name Standardisation</span>
+                                    <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 15px;">
+                                        <div role="button" id="apply-name-rules" class="ms-Button ms-Button--primary" style="font-size: 14px; font-weight: 600;">
+                                            <span class="ms-Button-label">Apply Name Standardisation</span>
+                                        </div>
+                                        <div role="button" id="undo-name-rules" class="ms-Button" style="font-size: 14px; font-weight: 600;" disabled>
+                                            <span class="ms-Button-label">Undo Last Application</span>
+                                        </div>
                                     </div>
-                                    <p class="ms-font-xs" style="margin-top: 8px; margin-bottom: 20px; color: #666;">
-                                        Applies name standardisation rules to the current worksheet.
+                                    <p class="ms-font-xs" style="margin-bottom: 20px; color: #666;">
+                                        Apply rules manually or undo the last application.
                                     </p>
                                     
                                     <div role="button" id="save-rules" class="ms-Button ms-Button--primary" style="font-size: 16px; font-weight: 600;">

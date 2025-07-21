@@ -8,6 +8,19 @@
 // Track whether a matter is currently loaded
 let currentMatterLoaded: string | null = null;
 
+// Undo functionality
+interface UndoSnapshot {
+  timestamp: number;
+  changes: Array<{
+    row: number;
+    column: number;
+    oldValue: any;
+    newValue: any;
+  }>;
+}
+
+let lastUndoSnapshot: UndoSnapshot | null = null;
+
 Office.onReady((info) => {
   if (info.host === Office.HostType.Excel) {
     document.getElementById("sideload-msg").style.display = "none";
@@ -25,20 +38,36 @@ Office.onReady((info) => {
     document.getElementById("add-fee-earner").onclick = () => addFeeEarnerRow();
     document.getElementById("update-from-spreadsheet").onclick = updateFeeEarnersFromSpreadsheet;
     document.getElementById("save-participants").onclick = saveParticipants;
-    
+
     // Rules functionality
     document.getElementById("save-rules").onclick = saveRules;
-    document.getElementById("apply-name-rules").onclick = applyNameStandardisationToWorksheet;
-    
+    document.getElementById("apply-name-rules").onclick =
+      applyNameStandardisationToWorksheetWithUndo;
+    document.getElementById("undo-name-rules").onclick = undoNameStandardisation;
+
+    // Nickname database functionality
+    document.getElementById("add-nickname").onclick = addNicknameEntry;
+    document.getElementById("reset-nicknames").onclick = resetNicknamesToDefault;
+
+    // Nickname database toggle
+    const nicknameToggle = document.getElementById("use-nickname-database") as HTMLInputElement;
+    nicknameToggle.onchange = () => {
+      const configDiv = document.getElementById("nickname-database-config");
+      configDiv.style.display = nicknameToggle.checked ? "block" : "none";
+    };
+
     // Name Standardisation rule toggle
-    const nameStandardisationToggle = document.getElementById("name-standardisation-enabled") as HTMLInputElement;
+    const nameStandardisationToggle = document.getElementById(
+      "name-standardisation-enabled"
+    ) as HTMLInputElement;
     nameStandardisationToggle.onchange = () => {
       const configDiv = document.getElementById("name-standardisation-config");
       configDiv.style.display = nameStandardisationToggle.checked ? "block" : "none";
     };
-    
-    // Make removeFeeEarnerRow available globally for onclick handlers
+
+    // Make functions available globally for onclick handlers
     (window as any).removeFeeEarnerRow = removeFeeEarnerRow;
+    (window as any).removeNicknameEntry = removeNicknameEntry;
 
     // Handle matter selection from dropdown
     const matterSelect = document.getElementById("matter-select") as HTMLSelectElement;
@@ -57,13 +86,19 @@ Office.onReady((info) => {
 
     // Load saved matter profiles on startup
     loadMatterProfiles();
-    
+
     // Initialize fee earners table with one empty row
     loadFeeEarnersTable([]);
-    
+
     // Initialize rules with defaults
     loadRulesConfig(getDefaultRules());
-    
+
+    // Initialize nickname database
+    loadNicknameDatabase({});
+
+    // Initialize undo button state
+    updateUndoButtonState();
+
     // Reset table scroll position
     setTimeout(() => resetTableScroll(), 200);
 
@@ -227,8 +262,7 @@ async function addChargeColumnInternal(worksheet: Excel.Worksheet, usedRange: Ex
   // Get user inputs
   const columnHeader =
     (document.getElementById("column-header") as HTMLInputElement).value || "Charge";
-  const columnPosition = (document.getElementById("column-position") as HTMLSelectElement)
-    .value;
+  const columnPosition = (document.getElementById("column-position") as HTMLSelectElement).value;
   const shouldPrepopulate = (document.getElementById("prepopulate-charge") as HTMLInputElement)
     .checked;
 
@@ -247,8 +281,7 @@ async function addChargeColumnInternal(worksheet: Excel.Worksheet, usedRange: Ex
 
   // Get current matter settings for formatting
   const headerBgColor = (document.getElementById("header-bg-color") as HTMLInputElement).value;
-  const headerTextColor = (document.getElementById("header-text-color") as HTMLInputElement)
-    .value;
+  const headerTextColor = (document.getElementById("header-text-color") as HTMLInputElement).value;
   const borderColor = (document.getElementById("border-color") as HTMLInputElement).value;
 
   // Set the header in the first row with matter settings
@@ -297,10 +330,7 @@ async function addChargeColumnInternal(worksheet: Excel.Worksheet, usedRange: Ex
       for (let i = 0; i < usedRange.rowCount - 1; i++) {
         values.push(["Q"]);
       }
-      showMessage(
-        "No Narrative/Description column found. Defaulting to 'Q' values.",
-        "warning"
-      );
+      showMessage("No Narrative/Description column found. Defaulting to 'Q' values.", "warning");
     }
   } else {
     // Default to "Q" (Query) when not prepopulating
@@ -336,7 +366,11 @@ async function addChargeColumnInternal(worksheet: Excel.Worksheet, usedRange: Ex
   targetColumn.format.autofitColumns();
 }
 
-async function addChargeColumnAtPosition(worksheet: Excel.Worksheet, usedRange: Excel.Range, columnNumber: number) {
+async function addChargeColumnAtPosition(
+  worksheet: Excel.Worksheet,
+  usedRange: Excel.Range,
+  columnNumber: number
+) {
   // Get user inputs
   const columnHeader =
     (document.getElementById("column-header") as HTMLInputElement).value || "Charge";
@@ -349,8 +383,7 @@ async function addChargeColumnAtPosition(worksheet: Excel.Worksheet, usedRange: 
 
   // Get current matter settings for formatting
   const headerBgColor = (document.getElementById("header-bg-color") as HTMLInputElement).value;
-  const headerTextColor = (document.getElementById("header-text-color") as HTMLInputElement)
-    .value;
+  const headerTextColor = (document.getElementById("header-text-color") as HTMLInputElement).value;
   const borderColor = (document.getElementById("border-color") as HTMLInputElement).value;
 
   // Set the header in the first row with matter settings
@@ -399,10 +432,7 @@ async function addChargeColumnAtPosition(worksheet: Excel.Worksheet, usedRange: 
       for (let i = 0; i < usedRange.rowCount - 1; i++) {
         values.push(["Q"]);
       }
-      showMessage(
-        "No Narrative/Description column found. Defaulting to 'Q' values.",
-        "warning"
-      );
+      showMessage("No Narrative/Description column found. Defaulting to 'Q' values.", "warning");
     }
   } else {
     // Default to "Q" (Query) when not prepopulating
@@ -463,10 +493,9 @@ export async function addChargeColumn() {
         (document.getElementById("column-header") as HTMLInputElement).value || "Charge";
       const columnPosition = (document.getElementById("column-position") as HTMLSelectElement)
         .value;
-      
-      const columnLetter = columnPosition === "next" 
-        ? getColumnLetter(usedRange.columnCount + 1)
-        : columnPosition;
+
+      const columnLetter =
+        columnPosition === "next" ? getColumnLetter(usedRange.columnCount + 1) : columnPosition;
 
       showMessage(
         `Successfully added '${columnHeader}' column at column ${columnLetter} with Y/N/Q options.`,
@@ -674,10 +703,10 @@ export async function colorCodeRows() {
 }
 
 async function addAmendedColumn(
-  worksheet: Excel.Worksheet, 
-  columnIndex: number, 
-  originalName: string, 
-  amendedName: string, 
+  worksheet: Excel.Worksheet,
+  columnIndex: number,
+  originalName: string,
+  amendedName: string,
   usedRange: Excel.Range,
   insertionOffsetCount: number
 ): Promise<string> {
@@ -689,7 +718,9 @@ async function addAmendedColumn(
   const headerBgColor = (document.getElementById("header-bg-color") as HTMLInputElement).value;
   const headerTextColor = (document.getElementById("header-text-color") as HTMLInputElement).value;
   const borderColor = (document.getElementById("border-color") as HTMLInputElement).value;
-  const enableAlternatingRows = (document.getElementById("enable-alternating-rows") as HTMLInputElement).checked;
+  const enableAlternatingRows = (
+    document.getElementById("enable-alternating-rows") as HTMLInputElement
+  ).checked;
   const altRowColor1 = (document.getElementById("alt-row-color1") as HTMLInputElement).value;
   const altRowColor2 = (document.getElementById("alt-row-color2") as HTMLInputElement).value;
 
@@ -717,7 +748,9 @@ async function addAmendedColumn(
   });
 
   // Format data cells in the new column
-  const amendedDataRange = worksheet.getRange(`${amendedColumnLetter}2:${amendedColumnLetter}${usedRange.rowCount}`);
+  const amendedDataRange = worksheet.getRange(
+    `${amendedColumnLetter}2:${amendedColumnLetter}${usedRange.rowCount}`
+  );
   const dataBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
   dataBorderItems.forEach((item) => {
     amendedDataRange.format.borders.getItem(item).style = "Continuous";
@@ -739,7 +772,7 @@ async function addAmendedColumn(
   // Auto-fit column widths for both original (renamed) and amended columns
   const originalColumn = worksheet.getRange(`${columnLetter}:${columnLetter}`);
   const amendedColumn = worksheet.getRange(`${amendedColumnLetter}:${amendedColumnLetter}`);
-  
+
   originalColumn.format.autofitColumns();
   amendedColumn.format.autofitColumns();
 
@@ -764,37 +797,43 @@ export async function addColumns() {
       }
 
       // Get user settings
-      const columnHeader = (document.getElementById("column-header") as HTMLInputElement).value.trim();
-      const prepopulateCharge = (document.getElementById("prepopulate-charge") as HTMLInputElement).checked;
+      const columnHeader = (
+        document.getElementById("column-header") as HTMLInputElement
+      ).value.trim();
+      const prepopulateCharge = (document.getElementById("prepopulate-charge") as HTMLInputElement)
+        .checked;
       const shouldAddCharge = columnHeader !== "" || prepopulateCharge;
-      const shouldAddAmendedNarrative = (document.getElementById("add-amended-narrative") as HTMLInputElement).checked;
-      const shouldAddAmendedTime = (document.getElementById("add-amended-time") as HTMLInputElement).checked;
+      const shouldAddAmendedNarrative = (
+        document.getElementById("add-amended-narrative") as HTMLInputElement
+      ).checked;
+      const shouldAddAmendedTime = (document.getElementById("add-amended-time") as HTMLInputElement)
+        .checked;
 
       const headerRow = usedRange.values[0];
       let processedColumns = [];
-      
+
       // Find column indices once at the beginning
       const narrativeColumnIndex = findNarrativeColumn(headerRow);
       const timeColumnIndex = findTimeColumn(headerRow);
 
       // PHASE 1: Process amended columns (right to left)
       const columnsToProcess = [];
-      
+
       if (shouldAddAmendedNarrative && narrativeColumnIndex !== -1) {
         columnsToProcess.push({
           index: narrativeColumnIndex,
           originalName: "Original Narrative",
           amendedName: "Amended Narrative",
-          type: "Narrative"
+          type: "Narrative",
         });
       }
-      
+
       if (shouldAddAmendedTime && timeColumnIndex !== -1) {
         columnsToProcess.push({
           index: timeColumnIndex,
-          originalName: "Original Time", 
+          originalName: "Original Time",
           amendedName: "Amended Time",
-          type: "Time"
+          type: "Time",
         });
       }
 
@@ -831,7 +870,7 @@ export async function addColumns() {
         usedRange = worksheet.getUsedRange();
         usedRange.load(["columnCount"]);
         await context.sync();
-        
+
         // Auto-fit all columns in the used range to account for any formatting changes
         const allColumns = usedRange.getEntireColumn();
         allColumns.format.autofitColumns();
@@ -843,7 +882,10 @@ export async function addColumns() {
         const message = `Successfully added ${processedColumns.join(", ")} column${processedColumns.length > 1 ? "s" : ""}.`;
         showMessage(message, "success");
       } else {
-        showMessage("No columns were configured to be added. Please check your settings.", "warning");
+        showMessage(
+          "No columns were configured to be added. Please check your settings.",
+          "warning"
+        );
       }
     });
   } catch (error) {
@@ -874,11 +916,113 @@ interface NameStandardisationRule {
   replaceOnlyFirstOccurrence: boolean;
   excludedNames: string[];
   minPartialMatchLength?: number; // Optional for backward compatibility
+  useNicknameDatabase?: boolean; // Optional for backward compatibility
+  customNicknames?: Record<string, string>; // nickname -> full name mapping
 }
 
 interface RulesConfig {
   nameStandardisation: NameStandardisationRule;
 }
+
+// Built-in nickname database
+const DEFAULT_NICKNAMES: Record<string, string> = {
+  // Common male nicknames
+  bill: "william",
+  billy: "william",
+  will: "william",
+  bob: "robert",
+  bobby: "robert",
+  rob: "robert",
+  robbie: "robert",
+  dick: "richard",
+  rick: "richard",
+  ricky: "richard",
+  rich: "richard",
+  richie: "richard",
+  jim: "james",
+  jimmy: "james",
+  jamie: "james",
+  joe: "joseph",
+  joey: "joseph",
+  mike: "michael",
+  mickey: "michael",
+  mick: "michael",
+  dave: "david",
+  davey: "david",
+  dan: "daniel",
+  danny: "daniel",
+  tom: "thomas",
+  tommy: "thomas",
+  chris: "christopher",
+  matt: "matthew",
+  steve: "stephen",
+  phil: "philip",
+  phil: "phillip",
+  tony: "anthony",
+  andy: "andrew",
+  drew: "andrew",
+  nick: "nicholas",
+  john: "jonathan",
+  johnny: "jonathan",
+  ben: "benjamin",
+  benny: "benjamin",
+  alex: "alexander",
+  sam: "samuel",
+  sammy: "samuel",
+  ed: "edward",
+  eddie: "edward",
+  ted: "edward",
+  teddy: "edward",
+  charlie: "charles",
+  chuck: "charles",
+  tim: "timothy",
+
+  // Common female nicknames
+  liz: "elizabeth",
+  lizzy: "elizabeth",
+  beth: "elizabeth",
+  betty: "elizabeth",
+  sue: "susan",
+  susie: "susan",
+  suzy: "susan",
+  kate: "katherine",
+  katie: "katherine",
+  kathy: "katherine",
+  kit: "katherine",
+  kitty: "katherine",
+  jen: "jennifer",
+  jenny: "jennifer",
+  jess: "jessica",
+  jessie: "jessica",
+  lisa: "elizabeth",
+  mel: "melissa",
+  amy: "amanda",
+  mandy: "amanda",
+  chris: "christine",
+  chrissy: "christine",
+  tina: "christina",
+  cindy: "cynthia",
+  patty: "patricia",
+  pat: "patricia",
+  trish: "patricia",
+  nancy: "nan",
+  ann: "anne",
+  annie: "anne",
+  maggie: "margaret",
+  meg: "margaret",
+  peggy: "margaret",
+  carol: "caroline",
+  carrie: "caroline",
+  julie: "julia",
+  jules: "julia",
+  marie: "mary",
+  sally: "sarah",
+  sara: "sarah",
+  alex: "alexandra",
+  lexi: "alexandra",
+  sam: "samantha",
+  sammie: "samantha",
+};
 
 // Matter Profile Management
 interface MatterProfile {
@@ -920,7 +1064,8 @@ function getCurrentSettings(): MatterProfile {
     columnPosition: (document.getElementById("column-position") as HTMLSelectElement).value,
     prepopulateCharge: (document.getElementById("prepopulate-charge") as HTMLInputElement).checked,
     noChargeKeywords: (document.getElementById("no-charge-keywords") as HTMLInputElement).value,
-    addAmendedNarrative: (document.getElementById("add-amended-narrative") as HTMLInputElement).checked,
+    addAmendedNarrative: (document.getElementById("add-amended-narrative") as HTMLInputElement)
+      .checked,
     addAmendedTime: (document.getElementById("add-amended-time") as HTMLInputElement).checked,
     feeEarners: getCurrentFeeEarners(),
     rules: getCurrentRules(),
@@ -1148,12 +1293,18 @@ function getCurrentFeeEarners(): FeeEarner[] {
     const rateInput = row.querySelector(".rate-input") as HTMLInputElement;
     const emailInput = row.querySelector(".email-input") as HTMLInputElement;
     const billingContactSelect = row.querySelector(".billing-contact-select") as HTMLSelectElement;
-    const billingContactNameInput = row.querySelector(".billing-contact-name-input") as HTMLInputElement;
-    const billingContactEmailInput = row.querySelector(".billing-contact-email-input") as HTMLInputElement;
+    const billingContactNameInput = row.querySelector(
+      ".billing-contact-name-input"
+    ) as HTMLInputElement;
+    const billingContactEmailInput = row.querySelector(
+      ".billing-contact-email-input"
+    ) as HTMLInputElement;
 
     if (nameInput && roleInput && rateInput && emailInput && billingContactSelect) {
-      const useAsDefaultCheckbox = row.querySelector(".use-as-default-checkbox") as HTMLInputElement;
-      
+      const useAsDefaultCheckbox = row.querySelector(
+        ".use-as-default-checkbox"
+      ) as HTMLInputElement;
+
       feeEarners.push({
         name: nameInput.value.trim(),
         role: roleInput.value.trim(),
@@ -1183,7 +1334,7 @@ function loadFeeEarnersTable(feeEarners: FeeEarner[]) {
     feeEarners.forEach((feeEarner) => {
       addFeeEarnerRowWithData(feeEarner);
     });
-    
+
     // Run duplicate detection after loading all fee earners
     setTimeout(() => {
       detectDuplicateNames();
@@ -1215,10 +1366,10 @@ function addFeeEarnerRowWithData(feeEarner: FeeEarner) {
   row.innerHTML = `
     <td><input type="text" class="name-input" value="${feeEarner.name}" placeholder="Enter name"></td>
     <td><input type="text" class="role-input" value="${feeEarner.role}" placeholder="Enter role"></td>
-    <td><input type="number" class="rate-input" value="${feeEarner.rate || ''}" placeholder="0.00" step="0.01" min="0"></td>
+    <td><input type="number" class="rate-input" value="${feeEarner.rate || ""}" placeholder="0.00" step="0.01" min="0"></td>
     <td><input type="email" class="email-input" value="${feeEarner.email}" placeholder="Enter email"></td>
     <td style="text-align: center;">
-      <input type="checkbox" class="use-as-default-checkbox" ${feeEarner.isDefaultForName ? 'checked' : ''}>
+      <input type="checkbox" class="use-as-default-checkbox" ${feeEarner.isDefaultForName ? "checked" : ""}>
     </td>
     <td>
       <select class="billing-contact-select">
@@ -1226,13 +1377,13 @@ function addFeeEarnerRowWithData(feeEarner: FeeEarner) {
         <option value="Other" ${feeEarner.billingContact === "Other" ? "selected" : ""}>Other</option>
       </select>
     </td>
-    <td class="${!isOtherBilling ? 'disabled-field' : ''}">
+    <td class="${!isOtherBilling ? "disabled-field" : ""}">
       <input type="text" class="billing-contact-name-input" value="${feeEarner.billingContactName}" 
-             placeholder="Enter name" ${!isOtherBilling ? 'disabled' : ''}>
+             placeholder="Enter name" ${!isOtherBilling ? "disabled" : ""}>
     </td>
-    <td class="${!isOtherBilling ? 'disabled-field' : ''}">
+    <td class="${!isOtherBilling ? "disabled-field" : ""}">
       <input type="email" class="billing-contact-email-input" value="${feeEarner.billingContactEmail}" 
-             placeholder="Enter email" ${!isOtherBilling ? 'disabled' : ''}>
+             placeholder="Enter email" ${!isOtherBilling ? "disabled" : ""}>
     </td>
     <td>
       <button type="button" class="remove-fee-earner" onclick="removeFeeEarnerRow(this)">Remove</button>
@@ -1244,14 +1395,16 @@ function addFeeEarnerRowWithData(feeEarner: FeeEarner) {
   // Add event listener for billing contact change
   const billingContactSelect = row.querySelector(".billing-contact-select");
   billingContactSelect?.addEventListener("change", handleBillingContactChange);
-  
+
   // Add event listeners for duplicate detection and default management
   const nameInput = row.querySelector(".name-input");
   const useAsDefaultCheckbox = row.querySelector(".use-as-default-checkbox");
-  
+
   nameInput?.addEventListener("input", () => detectDuplicateNames());
-  useAsDefaultCheckbox?.addEventListener("change", (event) => handleDefaultCheckboxChange(event, row));
-  
+  useAsDefaultCheckbox?.addEventListener("change", (event) =>
+    handleDefaultCheckboxChange(event, row)
+  );
+
   // Ensure scroll container can scroll to the beginning
   resetTableScroll();
 }
@@ -1302,10 +1455,10 @@ function detectDuplicateNames() {
   let hasDuplicates = false;
 
   // Group rows by first name (case insensitive)
-  rows.forEach(row => {
+  rows.forEach((row) => {
     const nameInput = row.querySelector(".name-input") as HTMLInputElement;
     if (nameInput && nameInput.value.trim()) {
-      const firstName = nameInput.value.trim().split(' ')[0].toLowerCase();
+      const firstName = nameInput.value.trim().split(" ")[0].toLowerCase();
       if (!nameGroups.has(firstName)) {
         nameGroups.set(firstName, []);
       }
@@ -1314,28 +1467,29 @@ function detectDuplicateNames() {
   });
 
   // Apply duplicate styling and manage default checkboxes
-  rows.forEach(row => {
+  rows.forEach((row) => {
     const nameInput = row.querySelector(".name-input") as HTMLInputElement;
     const useAsDefaultCheckbox = row.querySelector(".use-as-default-checkbox") as HTMLInputElement;
-    
+
     if (nameInput && nameInput.value.trim()) {
-      const firstName = nameInput.value.trim().split(' ')[0].toLowerCase();
+      const firstName = nameInput.value.trim().split(" ")[0].toLowerCase();
       const duplicateRows = nameGroups.get(firstName) || [];
-      
+
       if (duplicateRows.length > 1) {
         // This is a duplicate name - highlight the row
         row.classList.add("duplicate-name");
         useAsDefaultCheckbox.style.display = "block";
         hasDuplicates = true;
-        
+
         // Ensure only one is marked as default
-        const checkedDefaults = duplicateRows.filter(r => 
-          (r.querySelector(".use-as-default-checkbox") as HTMLInputElement).checked
+        const checkedDefaults = duplicateRows.filter(
+          (r) => (r.querySelector(".use-as-default-checkbox") as HTMLInputElement).checked
         );
-        
+
         if (checkedDefaults.length === 0) {
           // Auto-select the first one as default
-          (duplicateRows[0].querySelector(".use-as-default-checkbox") as HTMLInputElement).checked = true;
+          (duplicateRows[0].querySelector(".use-as-default-checkbox") as HTMLInputElement).checked =
+            true;
         }
       } else {
         // Not a duplicate - remove highlighting and hide checkbox
@@ -1355,17 +1509,17 @@ function detectDuplicateNames() {
 
 function resetTableScroll() {
   // Reset horizontal scroll position to beginning
-  const container = document.querySelector('.fee-earners-container') as HTMLElement;
+  const container = document.querySelector(".fee-earners-container") as HTMLElement;
   if (container) {
     // Force scroll to leftmost position
     container.scrollLeft = 0;
-    container.scrollTo({ left: 0, behavior: 'auto' });
-    
+    container.scrollTo({ left: 0, behavior: "auto" });
+
     // Also ensure proper CSS reset
-    container.style.scrollBehavior = 'auto';
+    container.style.scrollBehavior = "auto";
     setTimeout(() => {
       container.scrollLeft = 0;
-      container.style.scrollBehavior = 'smooth';
+      container.style.scrollBehavior = "smooth";
     }, 50);
   }
 }
@@ -1373,19 +1527,19 @@ function resetTableScroll() {
 function handleDefaultCheckboxChange(event: Event, currentRow: HTMLTableRowElement) {
   const checkbox = event.target as HTMLInputElement;
   const nameInput = currentRow.querySelector(".name-input") as HTMLInputElement;
-  
+
   if (checkbox.checked && nameInput.value.trim()) {
-    const firstName = nameInput.value.trim().split(' ')[0].toLowerCase();
+    const firstName = nameInput.value.trim().split(" ")[0].toLowerCase();
     const tbody = document.getElementById("fee-earners-tbody");
     if (!tbody) return;
 
     // Uncheck all other default checkboxes for the same first name
     const rows = Array.from(tbody.querySelectorAll("tr"));
-    rows.forEach(row => {
+    rows.forEach((row) => {
       if (row !== currentRow) {
         const rowNameInput = row.querySelector(".name-input") as HTMLInputElement;
         if (rowNameInput && rowNameInput.value.trim()) {
-          const rowFirstName = rowNameInput.value.trim().split(' ')[0].toLowerCase();
+          const rowFirstName = rowNameInput.value.trim().split(" ")[0].toLowerCase();
           if (rowFirstName === firstName) {
             const rowCheckbox = row.querySelector(".use-as-default-checkbox") as HTMLInputElement;
             rowCheckbox.checked = false;
@@ -1397,29 +1551,33 @@ function handleDefaultCheckboxChange(event: Event, currentRow: HTMLTableRowEleme
 }
 
 // Stage 3: Core Name Matching Logic
-function applyNameStandardisationRule(worksheetData: any[], feeEarners: FeeEarner[], ruleConfig: NameStandardisationRule): any[] {
+function applyNameStandardisationRule(
+  worksheetData: any[],
+  feeEarners: FeeEarner[],
+  ruleConfig: NameStandardisationRule
+): any[] {
   if (!ruleConfig.enabled || feeEarners.length === 0) {
     return worksheetData;
   }
 
   const processedData = [...worksheetData];
-  
+
   processedData.forEach((row, rowIndex) => {
     // Find the source narrative column (Original Narrative or Narrative)
     const sourceNarrativeKey = findSourceNarrativeColumn(row);
     if (!sourceNarrativeKey) return;
-    
+
     const narrativeText = row[sourceNarrativeKey];
-    if (!narrativeText || typeof narrativeText !== 'string') return;
-    
+    if (!narrativeText || typeof narrativeText !== "string") return;
+
     // Process the narrative text for name standardisation
     const processedText = processNarrativeForNames(
-      narrativeText, 
-      feeEarners, 
+      narrativeText,
+      feeEarners,
       ruleConfig,
       row.Date || row.date || null // Try to get date for matching
     );
-    
+
     // Only update the amended narrative column if changes were made
     const amendedColumnKey = getOrCreateAmendedNarrativeColumn(row);
     if (amendedColumnKey && processedText !== narrativeText) {
@@ -1432,104 +1590,117 @@ function applyNameStandardisationRule(worksheetData: any[], feeEarners: FeeEarne
 
 function findSourceNarrativeColumn(row: any): string | null {
   const keys = Object.keys(row);
-  
+
   // First, look for "Original Narrative"
-  const originalNarrative = keys.find(key => 
-    key.toLowerCase().includes('original') && key.toLowerCase().includes('narrative')
+  const originalNarrative = keys.find(
+    (key) => key.toLowerCase().includes("original") && key.toLowerCase().includes("narrative")
   );
   if (originalNarrative) return originalNarrative;
-  
+
   // Then look for just "Narrative" (but not "Amended Narrative")
-  const narrative = keys.find(key => 
-    key.toLowerCase().includes('narrative') && 
-    !key.toLowerCase().includes('amended') &&
-    !key.toLowerCase().includes('original')
+  const narrative = keys.find(
+    (key) =>
+      key.toLowerCase().includes("narrative") &&
+      !key.toLowerCase().includes("amended") &&
+      !key.toLowerCase().includes("original")
   );
   if (narrative) return narrative;
-  
+
   // Finally, check for "Description"
-  const description = keys.find(key => 
-    key.toLowerCase().includes('description')
-  );
+  const description = keys.find((key) => key.toLowerCase().includes("description"));
   return description || null;
 }
 
 function getOrCreateAmendedNarrativeColumn(row: any): string | null {
   const keys = Object.keys(row);
-  
+
   // Look for existing "Amended Narrative" column
-  const amendedColumn = keys.find(key => 
-    key.toLowerCase().includes('amended') && key.toLowerCase().includes('narrative')
+  const amendedColumn = keys.find(
+    (key) => key.toLowerCase().includes("amended") && key.toLowerCase().includes("narrative")
   );
-  
+
   if (amendedColumn) {
     return amendedColumn;
   }
-  
+
   // If not found, we'll need to create it - return the expected name
-  return 'Amended Narrative';
+  return "Amended Narrative";
 }
 
 function processNarrativeForNames(
-  narrativeText: string, 
-  feeEarners: FeeEarner[], 
+  narrativeText: string,
+  feeEarners: FeeEarner[],
   ruleConfig: NameStandardisationRule,
   rowDate?: string | Date | null
 ): string {
   if (!narrativeText) return narrativeText;
-  
+
   let processedText = narrativeText;
-  const excludedNames = ruleConfig.excludedNames.map(name => name.toLowerCase().trim());
-  
+  const excludedNames = ruleConfig.excludedNames.map((name) => name.toLowerCase().trim());
+
   // Create a map of first names to fee earners for quick lookup
   const nameMap = createFeeEarnerNameMap(feeEarners, ruleConfig.allowPartialMatches);
-  
+
   // Process each word in the narrative
   let hasReplacements = false;
-  
+
   // Split text but keep track of original spacing and punctuation
   const wordPattern = /\b(\w+)\b/g;
   let match;
-  
+
   while ((match = wordPattern.exec(narrativeText)) !== null) {
     const word = match[1];
     const cleanWord = word.toLowerCase();
-    
+
     // Skip if word is excluded
     if (excludedNames.includes(cleanWord)) continue;
-    
+
     // Skip if word is too short to be a meaningful name
     if (cleanWord.length < 2) continue;
-    
+
     // Check if this word matches any fee earner names
     const minLength = ruleConfig.minPartialMatchLength || 3; // Default to 3 if not set
-    const matchingFeeEarners = findMatchingFeeEarners(cleanWord, nameMap, ruleConfig.allowPartialMatches, minLength);
-    
+    let matchingFeeEarners = findMatchingFeeEarners(
+      cleanWord,
+      nameMap,
+      ruleConfig.allowPartialMatches,
+      minLength
+    );
+
+    // If no direct match and nickname database is enabled, check nicknames
+    if (matchingFeeEarners.length === 0 && ruleConfig.useNicknameDatabase !== false) {
+      const expandedName = findNicknameMatch(cleanWord, ruleConfig.customNicknames || {});
+      if (expandedName) {
+        // Try to find fee earners with this expanded name
+        matchingFeeEarners = findMatchingFeeEarners(expandedName, nameMap, false, minLength);
+      }
+    }
+
     if (matchingFeeEarners.length > 0) {
       // Determine which fee earner to use
       const selectedFeeEarner = selectBestFeeEarnerMatch(
-        matchingFeeEarners, 
-        rowDate, 
+        matchingFeeEarners,
+        rowDate,
         ruleConfig.useDateMatching
       );
-      
+
       if (selectedFeeEarner && selectedFeeEarner.name !== word) {
         // Check if this word is already part of a full name
         if (isAlreadyFullName(word, selectedFeeEarner.name, narrativeText, match.index!)) {
           continue; // Skip replacement if it's already a full name
         }
-        
+
         // Replace the first name with the full name
         if (ruleConfig.replaceOnlyFirstOccurrence && hasReplacements) {
           // Skip if we've already done a replacement and only first occurrence is enabled
           continue;
         }
-        
+
         // Create a regex that preserves the original case and word boundaries
-        const regex = new RegExp(`\\b${escapeRegExp(word)}\\b`, hasReplacements ? 'g' : '');
+        const regex = new RegExp(`\\b${escapeRegExp(word)}\\b`, hasReplacements ? "g" : "");
         processedText = processedText.replace(regex, selectedFeeEarner.name);
         hasReplacements = true;
-        
+
         // If only replacing first occurrence, we can stop after the first replacement
         if (ruleConfig.replaceOnlyFirstOccurrence) {
           break;
@@ -1537,97 +1708,163 @@ function processNarrativeForNames(
       }
     }
   }
-  
+
   return processedText;
 }
 
 function isAlreadyFullName(
-  foundWord: string, 
-  fullName: string, 
-  narrativeText: string, 
+  foundWord: string,
+  fullName: string,
+  narrativeText: string,
   wordIndex: number
 ): boolean {
   // Look for any word that follows the found word
   // Get text starting from after the found word
   const afterWord = narrativeText.slice(wordIndex + foundWord.length);
-  
+
   // Use regex to find the next word
   const nextWordMatch = afterWord.match(/^\s+(\w+)/);
-  
+
   if (nextWordMatch) {
     const nextWord = nextWordMatch[1];
-    
+
     // Check if the next word looks like a surname (capitalized and not obviously not a name)
     if (isLikelySurname(nextWord)) {
       return true; // Already appears to be part of a full name, don't replace
     }
-    
+
     // Additional check: if the fee earner's name matches exactly what we found
     const nameParts = fullName.split(/\s+/);
     if (nameParts.length >= 2) {
       const firstName = nameParts[0].toLowerCase();
       const lastName = nameParts[nameParts.length - 1].toLowerCase();
-      
+
       // Check if found word + next word matches the fee earner's name exactly
       if (foundWord.toLowerCase() === firstName && nextWord.toLowerCase() === lastName) {
         return true; // This is exactly the fee earner's full name, don't replace
       }
     }
   }
-  
+
   return false; // Not a full name, safe to replace
 }
 
 function isLikelySurname(word: string): boolean {
   // Check if a word is likely to be a surname based on common patterns
-  
+
   // Must be capitalized (proper noun)
   if (word[0] !== word[0].toUpperCase()) {
     return false;
   }
-  
+
   // Must be at least 2 characters
   if (word.length < 2) {
     return false;
   }
-  
+
   // Exclude common words that might be capitalized but aren't surnames
   const excludedWords = [
-    'THE', 'AND', 'OR', 'BUT', 'FOR', 'NOR', 'SO', 'YET',
-    'IN', 'ON', 'AT', 'TO', 'FROM', 'BY', 'WITH', 'ABOUT',
-    'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY',
-    'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
-    'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER',
-    'THIS', 'THAT', 'THESE', 'THOSE', 'HIS', 'HER', 'THEIR', 'OUR', 'YOUR',
-    'WORKED', 'ATTENDED', 'REVIEWED', 'PREPARED', 'DRAFTED', 'MEETING', 'CALL'
+    "THE",
+    "AND",
+    "OR",
+    "BUT",
+    "FOR",
+    "NOR",
+    "SO",
+    "YET",
+    "IN",
+    "ON",
+    "AT",
+    "TO",
+    "FROM",
+    "BY",
+    "WITH",
+    "ABOUT",
+    "MONDAY",
+    "TUESDAY",
+    "WEDNESDAY",
+    "THURSDAY",
+    "FRIDAY",
+    "SATURDAY",
+    "SUNDAY",
+    "JANUARY",
+    "FEBRUARY",
+    "MARCH",
+    "APRIL",
+    "MAY",
+    "JUNE",
+    "JULY",
+    "AUGUST",
+    "SEPTEMBER",
+    "OCTOBER",
+    "NOVEMBER",
+    "DECEMBER",
+    "THIS",
+    "THAT",
+    "THESE",
+    "THOSE",
+    "HIS",
+    "HER",
+    "THEIR",
+    "OUR",
+    "YOUR",
+    "WORKED",
+    "ATTENDED",
+    "REVIEWED",
+    "PREPARED",
+    "DRAFTED",
+    "MEETING",
+    "CALL",
   ];
-  
+
   if (excludedWords.includes(word.toUpperCase())) {
     return false;
   }
-  
+
   // If it passes these tests, it's likely a surname
   return true;
 }
 
-function createFeeEarnerNameMap(feeEarners: FeeEarner[], allowPartialMatches: boolean): Map<string, FeeEarner[]> {
+function findNicknameMatch(
+  searchWord: string,
+  customNicknames: Record<string, string>
+): string | null {
+  const lowerSearchWord = searchWord.toLowerCase();
+
+  // Check custom nicknames first (they override defaults)
+  if (customNicknames[lowerSearchWord]) {
+    return customNicknames[lowerSearchWord];
+  }
+
+  // Check built-in nickname database
+  if (DEFAULT_NICKNAMES[lowerSearchWord]) {
+    return DEFAULT_NICKNAMES[lowerSearchWord];
+  }
+
+  return null;
+}
+
+function createFeeEarnerNameMap(
+  feeEarners: FeeEarner[],
+  allowPartialMatches: boolean
+): Map<string, FeeEarner[]> {
   const nameMap = new Map<string, FeeEarner[]>();
-  
-  feeEarners.forEach(feeEarner => {
+
+  feeEarners.forEach((feeEarner) => {
     if (!feeEarner.name) return;
-    
+
     const names = feeEarner.name.split(/\s+/);
     const firstName = names[0].toLowerCase();
-    
+
     // Add the first name to the map
     if (!nameMap.has(firstName)) {
       nameMap.set(firstName, []);
     }
     nameMap.get(firstName)!.push(feeEarner);
-    
+
     // If partial matches are allowed, also add name variations
     if (allowPartialMatches && feeEarner.nameVariations) {
-      feeEarner.nameVariations.forEach(variation => {
+      feeEarner.nameVariations.forEach((variation) => {
         const variationKey = variation.toLowerCase().trim();
         if (!nameMap.has(variationKey)) {
           nameMap.set(variationKey, []);
@@ -1636,13 +1873,13 @@ function createFeeEarnerNameMap(feeEarners: FeeEarner[], allowPartialMatches: bo
       });
     }
   });
-  
+
   return nameMap;
 }
 
 function findMatchingFeeEarners(
-  searchName: string, 
-  nameMap: Map<string, FeeEarner[]>, 
+  searchName: string,
+  nameMap: Map<string, FeeEarner[]>,
   allowPartialMatches: boolean,
   minPartialMatchLength: number = 3
 ): FeeEarner[] {
@@ -1650,43 +1887,46 @@ function findMatchingFeeEarners(
   if (nameMap.has(searchName)) {
     return nameMap.get(searchName)!;
   }
-  
+
   // Partial matching if enabled
   if (allowPartialMatches) {
     const matches: FeeEarner[] = [];
     const uniqueFeeEarners = new Set<FeeEarner>();
-    
+
     nameMap.forEach((feeEarners, mappedName) => {
       // For partial matching, we want to be more careful:
       // 1. Both names should meet minimum length requirement
       // 2. Only match prefixes, not arbitrary substrings
-      
-      if (searchName.length >= minPartialMatchLength && mappedName.length >= minPartialMatchLength) {
+
+      if (
+        searchName.length >= minPartialMatchLength &&
+        mappedName.length >= minPartialMatchLength
+      ) {
         // Check if search name is a prefix of mapped name (e.g., "John" matches "Johnny")
         if (mappedName.startsWith(searchName)) {
-          feeEarners.forEach(fe => uniqueFeeEarners.add(fe));
+          feeEarners.forEach((fe) => uniqueFeeEarners.add(fe));
         }
         // Check if mapped name is a prefix of search name (e.g., "Johnny" typed, "John" in system)
         else if (searchName.startsWith(mappedName)) {
-          feeEarners.forEach(fe => uniqueFeeEarners.add(fe));
+          feeEarners.forEach((fe) => uniqueFeeEarners.add(fe));
         }
       }
     });
-    
+
     return Array.from(uniqueFeeEarners);
   }
-  
+
   return [];
 }
 
 function selectBestFeeEarnerMatch(
-  matchingFeeEarners: FeeEarner[], 
-  rowDate: string | Date | null, 
+  matchingFeeEarners: FeeEarner[],
+  rowDate: string | Date | null,
   useDateMatching: boolean
 ): FeeEarner | null {
   if (matchingFeeEarners.length === 0) return null;
   if (matchingFeeEarners.length === 1) return matchingFeeEarners[0];
-  
+
   // If date matching is enabled and we have a date, try to find the best match
   if (useDateMatching && rowDate) {
     const parsedRowDate = parseDate(rowDate);
@@ -1698,34 +1938,33 @@ function selectBestFeeEarnerMatch(
       }
     }
   }
-  
+
   // Find the fee earner marked as default for this name group
-  const defaultFeeEarner = matchingFeeEarners.find(fe => fe.isDefaultForName);
+  const defaultFeeEarner = matchingFeeEarners.find((fe) => fe.isDefaultForName);
   if (defaultFeeEarner) return defaultFeeEarner;
-  
+
   // Fall back to the first one if no default is set
   return matchingFeeEarners[0];
 }
 
 function findFeeEarnerByDateRange(
-  feeEarners: FeeEarner[], 
-  targetDate: Date, 
+  feeEarners: FeeEarner[],
+  targetDate: Date,
   daysTolerance: number
 ): FeeEarner | null {
   // In a full implementation, this would check against fee earner assignment dates
   // stored in the fee earner records or a separate tracking system
-  
+
   // For now, we'll implement a placeholder that could be extended
   // to check against actual date records when that functionality is added
-  
+
   const targetTime = targetDate.getTime();
   const toleranceMs = daysTolerance * 24 * 60 * 60 * 1000; // Convert days to milliseconds
-  
+
   for (const feeEarner of feeEarners) {
     // Placeholder: In a real implementation, this would check against
     // stored dates for when each fee earner was assigned to work
     // For now, we'll return null to fall back to default logic
-    
     // Future enhancement: Check feeEarner.assignmentDates or similar
     // if (feeEarner.assignmentDates) {
     //   for (const assignmentDate of feeEarner.assignmentDates) {
@@ -1736,39 +1975,39 @@ function findFeeEarnerByDateRange(
     //   }
     // }
   }
-  
+
   return null; // No date-based match found, fall back to default logic
 }
 
 // Enhanced date parsing with multiple format support
 function parseDate(dateInput: string | Date): Date | null {
   if (!dateInput) return null;
-  
+
   if (dateInput instanceof Date) return dateInput;
-  
+
   // Try multiple date formats
   const dateString = dateInput.toString().trim();
-  
+
   // Common formats to try
   const formats = [
     // ISO format
     /^\d{4}-\d{2}-\d{2}$/,
     // US format MM/DD/YYYY
     /^\d{1,2}\/\d{1,2}\/\d{4}$/,
-    // UK format DD/MM/YYYY  
+    // UK format DD/MM/YYYY
     /^\d{1,2}\/\d{1,2}\/\d{4}$/,
     // Short format with dashes
     /^\d{1,2}-\d{1,2}-\d{4}$/,
     // Excel date number (if it's a number)
-    /^\d+(\.\d+)?$/
+    /^\d+(\.\d+)?$/,
   ];
-  
+
   // Try standard JavaScript Date parsing first
   let date = new Date(dateString);
   if (!isNaN(date.getTime())) {
     return date;
   }
-  
+
   // If that fails, try Excel serial date number conversion
   const numericValue = parseFloat(dateString);
   if (!isNaN(numericValue) && numericValue > 40000 && numericValue < 50000) {
@@ -1780,12 +2019,12 @@ function parseDate(dateInput: string | Date): Date | null {
       return date;
     }
   }
-  
+
   return null;
 }
 
 function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 // Apply name standardisation rules to the current worksheet
@@ -1794,12 +2033,15 @@ async function applyNameStandardisationToWorksheet() {
     // Get current matter and its rules
     const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
     if (!selectedMatter) {
-      showMessage("Please select a matter profile before applying name standardisation rules.", "error");
+      showMessage(
+        "Please select a matter profile before applying name standardisation rules.",
+        "error"
+      );
       return;
     }
 
     const profiles = getMatterProfiles();
-    const currentProfile = profiles.find(p => p.name === selectedMatter);
+    const currentProfile = profiles.find((p) => p.name === selectedMatter);
     if (!currentProfile || !currentProfile.rules) {
       showMessage("No rules found for the selected matter profile.", "error");
       return;
@@ -1820,7 +2062,7 @@ async function applyNameStandardisationToWorksheet() {
     await Excel.run(async (context) => {
       const worksheet = context.workbook.worksheets.getActiveWorksheet();
       const usedRange = worksheet.getUsedRange();
-      
+
       if (!usedRange) {
         showMessage("No data found in the worksheet to process.", "error");
         return;
@@ -1836,11 +2078,11 @@ async function applyNameStandardisationToWorksheet() {
       for (let i = 1; i < usedRange.values.length; i++) {
         const row = usedRange.values[i];
         const rowData: any = {};
-        
+
         headers.forEach((header, colIndex) => {
           rowData[header] = row[colIndex];
         });
-        
+
         worksheetData.push(rowData);
       }
 
@@ -1849,46 +2091,48 @@ async function applyNameStandardisationToWorksheet() {
 
       // Update the worksheet with processed data
       let updatedCount = 0;
-      
+
       // First check if "Amended Narrative" column exists
-      let amendedNarrativeCol = headers.findIndex(h => 
-        h.toLowerCase().includes('amended') && h.toLowerCase().includes('narrative')
+      let amendedNarrativeCol = headers.findIndex(
+        (h) => h.toLowerCase().includes("amended") && h.toLowerCase().includes("narrative")
       );
-      
+
       // If column doesn't exist, we need to check if we need to create it
-      const needsAmendedColumn = amendedNarrativeCol < 0 && 
-        processedData.some(row => row['Amended Narrative'] !== undefined);
-      
+      const needsAmendedColumn =
+        amendedNarrativeCol < 0 &&
+        processedData.some((row) => row["Amended Narrative"] !== undefined);
+
       if (needsAmendedColumn) {
         // We'll need to add the column after the source narrative column
-        const sourceCol = headers.findIndex(h => 
-          (h.toLowerCase().includes('original') && h.toLowerCase().includes('narrative')) ||
-          (h.toLowerCase().includes('narrative') && !h.toLowerCase().includes('amended'))
+        const sourceCol = headers.findIndex(
+          (h) =>
+            (h.toLowerCase().includes("original") && h.toLowerCase().includes("narrative")) ||
+            (h.toLowerCase().includes("narrative") && !h.toLowerCase().includes("amended"))
         );
-        
+
         if (sourceCol >= 0) {
           // Insert new column after the source narrative column
           const insertCol = sourceCol + 1;
           const newColumn = worksheet.getCell(0, insertCol).getEntireColumn();
           newColumn.insert(Excel.InsertShiftDirection.right);
-          
+
           // Set the header for the new column
           const headerCell = worksheet.getCell(0, insertCol);
-          headerCell.values = [['Amended Narrative']];
-          
+          headerCell.values = [["Amended Narrative"]];
+
           // Update our tracking
           amendedNarrativeCol = insertCol;
-          headers.splice(insertCol, 0, 'Amended Narrative');
-          
+          headers.splice(insertCol, 0, "Amended Narrative");
+
           await context.sync();
         }
       }
-      
+
       // Now update the data
       for (let i = 0; i < processedData.length; i++) {
         const processedRow = processedData[i];
-        const amendedValue = processedRow['Amended Narrative'];
-        
+        const amendedValue = processedRow["Amended Narrative"];
+
         if (amendedValue !== undefined && amendedNarrativeCol >= 0) {
           // Update the cell in Excel (i+1 because row 0 is headers)
           const cell = worksheet.getCell(i + 1, amendedNarrativeCol);
@@ -1900,12 +2144,14 @@ async function applyNameStandardisationToWorksheet() {
       await context.sync();
 
       if (updatedCount > 0) {
-        showMessage(`Name standardisation applied successfully. Updated ${updatedCount} rows.`, "success");
+        showMessage(
+          `Name standardisation applied successfully. Updated ${updatedCount} rows.`,
+          "success"
+        );
       } else {
         showMessage("Name standardisation completed, but no changes were needed.", "info");
       }
     });
-
   } catch (error) {
     console.error("Error applying name standardisation:", error);
     showMessage("An error occurred while applying name standardisation: " + error.message, "error");
@@ -1951,7 +2197,7 @@ async function updateFeeEarnersFromSpreadsheet() {
         if (nameValue && nameValue.toString().trim()) {
           const name = nameValue.toString().trim();
           const role = roleValue ? roleValue.toString().trim() : "";
-          const rate = rateValue ? (parseFloat(rateValue.toString()) || 0) : 0;
+          const rate = rateValue ? parseFloat(rateValue.toString()) || 0 : 0;
 
           // Create a unique key for this combination
           const key = `${name}-${role}-${rate}`;
@@ -1972,15 +2218,15 @@ async function updateFeeEarnersFromSpreadsheet() {
 
       // Update the fee earners table with found data
       const feeEarners = Array.from(uniqueFeeEarners.values());
-      
+
       if (feeEarners.length > 0) {
         loadFeeEarnersTable(feeEarners);
-        
+
         const foundColumns = [];
         if (nameColumnIndex !== -1) foundColumns.push("Name");
         if (roleColumnIndex !== -1) foundColumns.push("Role");
         if (rateColumnIndex !== -1) foundColumns.push("Rate");
-        
+
         showMessage(
           `Found ${feeEarners.length} unique fee earner${feeEarners.length > 1 ? "s" : ""} from ${foundColumns.join(", ")} column${foundColumns.length > 1 ? "s" : ""}. Please fill in missing information manually.`,
           "success"
@@ -1999,22 +2245,20 @@ function saveParticipants() {
   const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
 
   if (!selectedMatter) {
-    showMessage(
-      "Please select a matter from the dropdown to save participants to.",
-      "error"
-    );
+    showMessage("Please select a matter from the dropdown to save participants to.", "error");
     return;
   }
 
   // Get current fee earners from the table
   const currentFeeEarners = getCurrentFeeEarners();
-  
+
   // Filter out completely empty rows
-  const validFeeEarners = currentFeeEarners.filter(feeEarner => 
-    feeEarner.name.trim() !== "" || 
-    feeEarner.role.trim() !== "" || 
-    feeEarner.rate > 0 || 
-    feeEarner.email.trim() !== ""
+  const validFeeEarners = currentFeeEarners.filter(
+    (feeEarner) =>
+      feeEarner.name.trim() !== "" ||
+      feeEarner.role.trim() !== "" ||
+      feeEarner.rate > 0 ||
+      feeEarner.email.trim() !== ""
   );
 
   // Get existing matter profiles
@@ -2025,13 +2269,316 @@ function saveParticipants() {
     // Update the existing profile with new fee earners data
     profiles[existingIndex].feeEarners = validFeeEarners;
     saveMatterProfiles(profiles);
-    
+
     showMessage(
       `Successfully saved ${validFeeEarners.length} fee earner${validFeeEarners.length !== 1 ? "s" : ""} to matter profile "${selectedMatter}".`,
       "success"
     );
   } else {
     showMessage("Selected matter profile not found. Please create a new profile first.", "error");
+  }
+}
+
+// Nickname Database Management
+function addNicknameEntry() {
+  const nicknameList = document.getElementById("nickname-list");
+  if (!nicknameList) return;
+
+  const entry = createNicknameEntry("", "", false);
+  nicknameList.appendChild(entry);
+
+  // Focus the first input in the new entry
+  const firstInput = entry.querySelector("input");
+  if (firstInput) {
+    firstInput.focus();
+  }
+}
+
+function createNicknameEntry(
+  nickname: string,
+  fullName: string,
+  isBuiltIn: boolean = false
+): HTMLElement {
+  const entry = document.createElement("div");
+  entry.className = `nickname-entry ${isBuiltIn ? "built-in" : ""}`;
+
+  entry.innerHTML = `
+    <input type="text" class="nickname-input" value="${nickname}" placeholder="Nickname" ${isBuiltIn ? "readonly" : ""}>
+    <span class="nickname-arrow">→</span>
+    <input type="text" class="fullname-input" value="${fullName}" placeholder="Full Name" ${isBuiltIn ? "readonly" : ""}>
+    <button type="button" class="nickname-remove" onclick="removeNicknameEntry(this)">
+      ${isBuiltIn ? "Hide" : "Remove"}
+    </button>
+  `;
+
+  return entry;
+}
+
+function removeNicknameEntry(button: HTMLButtonElement) {
+  const entry = button.closest(".nickname-entry");
+  if (entry) {
+    entry.remove();
+  }
+}
+
+function resetNicknamesToDefault() {
+  loadNicknameDatabase(DEFAULT_NICKNAMES);
+}
+
+function loadNicknameDatabase(nicknames: Record<string, string>) {
+  const nicknameList = document.getElementById("nickname-list");
+  if (!nicknameList) return;
+
+  nicknameList.innerHTML = "";
+
+  // Add built-in nicknames (read-only) - sorted alphabetically by nickname
+  const sortedBuiltInNicknames = Object.entries(DEFAULT_NICKNAMES).sort(
+    ([nicknameA], [nicknameB]) => nicknameA.toLowerCase().localeCompare(nicknameB.toLowerCase())
+  );
+
+  sortedBuiltInNicknames.forEach(([nickname, fullName]) => {
+    const entry = createNicknameEntry(nickname, fullName, true);
+    nicknameList.appendChild(entry);
+  });
+
+  // Add custom nicknames (editable) - sorted alphabetically by nickname
+  const sortedCustomNicknames = Object.entries(nicknames)
+    .filter(([nickname]) => !DEFAULT_NICKNAMES[nickname])
+    .sort(([nicknameA], [nicknameB]) =>
+      nicknameA.toLowerCase().localeCompare(nicknameB.toLowerCase())
+    );
+
+  sortedCustomNicknames.forEach(([nickname, fullName]) => {
+    const entry = createNicknameEntry(nickname, fullName, false);
+    nicknameList.appendChild(entry);
+  });
+}
+
+function getCurrentNicknames(): Record<string, string> {
+  const nicknames: Record<string, string> = {};
+  const nicknameList = document.getElementById("nickname-list");
+
+  if (nicknameList) {
+    const entries = nicknameList.querySelectorAll(".nickname-entry");
+    entries.forEach((entry) => {
+      const nicknameInput = entry.querySelector(".nickname-input") as HTMLInputElement;
+      const fullNameInput = entry.querySelector(".fullname-input") as HTMLInputElement;
+
+      if (
+        nicknameInput &&
+        fullNameInput &&
+        nicknameInput.value.trim() &&
+        fullNameInput.value.trim()
+      ) {
+        nicknames[nicknameInput.value.trim().toLowerCase()] = fullNameInput.value
+          .trim()
+          .toLowerCase();
+      }
+    });
+  }
+
+  return nicknames;
+}
+
+// Undo and Auto-Apply Functionality
+async function undoNameStandardisation() {
+  if (!lastUndoSnapshot) {
+    showMessage("No changes to undo.", "info");
+    return;
+  }
+
+  try {
+    await Excel.run(async (context) => {
+      const worksheet = context.workbook.worksheets.getActiveWorksheet();
+
+      // Restore all changed values
+      for (const change of lastUndoSnapshot.changes) {
+        const cell = worksheet.getCell(change.row, change.column);
+        cell.values = [[change.oldValue]];
+      }
+
+      await context.sync();
+
+      showMessage(
+        `Undid ${lastUndoSnapshot.changes.length} changes from name standardisation.`,
+        "success"
+      );
+
+      // Clear the undo snapshot and disable undo button
+      lastUndoSnapshot = null;
+      updateUndoButtonState();
+    });
+  } catch (error) {
+    console.error("Error undoing changes:", error);
+    showMessage("An error occurred while undoing changes: " + error.message, "error");
+  }
+}
+
+function updateUndoButtonState() {
+  const undoButton = document.getElementById("undo-name-rules") as HTMLElement;
+  if (undoButton) {
+    if (lastUndoSnapshot) {
+      undoButton.removeAttribute("disabled");
+      undoButton.style.opacity = "1";
+      undoButton.style.cursor = "pointer";
+    } else {
+      undoButton.setAttribute("disabled", "true");
+      undoButton.style.opacity = "0.5";
+      undoButton.style.cursor = "not-allowed";
+    }
+  }
+}
+
+// Modified apply function to support undo
+async function applyNameStandardisationToWorksheetWithUndo() {
+  try {
+    // Get current matter and its rules
+    const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+    if (!selectedMatter) {
+      showMessage(
+        "Please select a matter profile before applying name standardisation rules.",
+        "error"
+      );
+      return;
+    }
+
+    const profiles = getMatterProfiles();
+    const currentProfile = profiles.find((p) => p.name === selectedMatter);
+    if (!currentProfile || !currentProfile.rules) {
+      showMessage("No rules found for the selected matter profile.", "error");
+      return;
+    }
+
+    const nameRule = currentProfile.rules.nameStandardisation;
+    if (!nameRule.enabled) {
+      showMessage("Name standardisation rule is not enabled for this matter.", "info");
+      return;
+    }
+
+    const feeEarners = currentProfile.feeEarners || [];
+    if (feeEarners.length === 0) {
+      showMessage("No fee earners found for this matter. Please add fee earners first.", "error");
+      return;
+    }
+
+    await Excel.run(async (context) => {
+      const worksheet = context.workbook.worksheets.getActiveWorksheet();
+      const usedRange = worksheet.getUsedRange();
+
+      if (!usedRange) {
+        showMessage("No data found in the worksheet to process.", "error");
+        return;
+      }
+
+      usedRange.load(["values", "formulas", "rowCount", "columnCount"]);
+      await context.sync();
+
+      // Convert Excel data to a workable format
+      const headers = usedRange.values[0] as string[];
+      const worksheetData: any[] = [];
+
+      for (let i = 1; i < usedRange.values.length; i++) {
+        const row = usedRange.values[i];
+        const rowData: any = {};
+
+        headers.forEach((header, colIndex) => {
+          rowData[header] = row[colIndex];
+        });
+
+        worksheetData.push(rowData);
+      }
+
+      // Apply name standardisation rules
+      const processedData = applyNameStandardisationRule(worksheetData, feeEarners, nameRule);
+
+      // Create undo snapshot
+      const undoSnapshot: UndoSnapshot = {
+        timestamp: Date.now(),
+        changes: [],
+      };
+
+      // Update the worksheet with processed data and track changes
+      let updatedCount = 0;
+
+      // Check if "Amended Narrative" column exists
+      let amendedNarrativeCol = headers.findIndex(
+        (h) => h.toLowerCase().includes("amended") && h.toLowerCase().includes("narrative")
+      );
+
+      // If column doesn't exist, we need to check if we need to create it
+      const needsAmendedColumn =
+        amendedNarrativeCol < 0 &&
+        processedData.some((row) => row["Amended Narrative"] !== undefined);
+
+      if (needsAmendedColumn) {
+        // Handle column creation (same as before)
+        const sourceCol = headers.findIndex(
+          (h) =>
+            (h.toLowerCase().includes("original") && h.toLowerCase().includes("narrative")) ||
+            (h.toLowerCase().includes("narrative") && !h.toLowerCase().includes("amended"))
+        );
+
+        if (sourceCol >= 0) {
+          const insertCol = sourceCol + 1;
+          const newColumn = worksheet.getCell(0, insertCol).getEntireColumn();
+          newColumn.insert(Excel.InsertShiftDirection.right);
+
+          const headerCell = worksheet.getCell(0, insertCol);
+          headerCell.values = [["Amended Narrative"]];
+
+          amendedNarrativeCol = insertCol;
+          headers.splice(insertCol, 0, "Amended Narrative");
+
+          await context.sync();
+        }
+      }
+
+      // Now update the data and track changes
+      for (let i = 0; i < processedData.length; i++) {
+        const processedRow = processedData[i];
+        const amendedValue = processedRow["Amended Narrative"];
+
+        if (amendedValue !== undefined && amendedNarrativeCol >= 0) {
+          // Get the old value for undo
+          const oldValue = usedRange.values[i + 1][amendedNarrativeCol] || "";
+
+          if (amendedValue !== oldValue) {
+            // Track this change for undo
+            undoSnapshot.changes.push({
+              row: i + 1,
+              column: amendedNarrativeCol,
+              oldValue: oldValue,
+              newValue: amendedValue,
+            });
+
+            // Update the cell
+            const cell = worksheet.getCell(i + 1, amendedNarrativeCol);
+            cell.values = [[amendedValue]];
+            updatedCount++;
+          }
+        }
+      }
+
+      await context.sync();
+
+      // Store undo snapshot only if changes were made
+      if (undoSnapshot.changes.length > 0) {
+        lastUndoSnapshot = undoSnapshot;
+        updateUndoButtonState();
+      }
+
+      if (updatedCount > 0) {
+        showMessage(
+          `Name standardisation applied successfully. Updated ${updatedCount} rows. Undo is available.`,
+          "success"
+        );
+      } else {
+        showMessage("Name standardisation completed, but no changes were needed.", "info");
+      }
+    });
+  } catch (error) {
+    console.error("Error applying name standardisation:", error);
+    showMessage("An error occurred while applying name standardisation: " + error.message, "error");
   }
 }
 
@@ -2045,17 +2592,19 @@ function getDefaultRules(): RulesConfig {
       useDateMatching: true,
       replaceOnlyFirstOccurrence: true,
       excludedNames: [],
-      minPartialMatchLength: 3
-    }
+      minPartialMatchLength: 3,
+      useNicknameDatabase: true,
+      customNicknames: {},
+    },
   };
 }
 
 function getCurrentRules(): RulesConfig {
   const excludedNamesText = (document.getElementById("excluded-names") as HTMLInputElement).value;
   const excludedNames = excludedNamesText
-    .split(',')
-    .map(name => name.trim())
-    .filter(name => name.length > 0);
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
 
   const minPartialMatchLength = parseInt(
     (document.getElementById("min-partial-match-length") as HTMLInputElement).value || "3",
@@ -2064,41 +2613,60 @@ function getCurrentRules(): RulesConfig {
 
   return {
     nameStandardisation: {
-      enabled: (document.getElementById("name-standardisation-enabled") as HTMLInputElement).checked,
+      enabled: (document.getElementById("name-standardisation-enabled") as HTMLInputElement)
+        .checked,
       caseSensitive: false, // Case sensitivity removed from Stage 1
       allowPartialMatches: (document.getElementById("partial-matches") as HTMLInputElement).checked,
       useDateMatching: (document.getElementById("date-matching") as HTMLInputElement).checked,
-      replaceOnlyFirstOccurrence: (document.getElementById("first-occurrence-only") as HTMLInputElement).checked,
+      replaceOnlyFirstOccurrence: (
+        document.getElementById("first-occurrence-only") as HTMLInputElement
+      ).checked,
       excludedNames: excludedNames,
-      minPartialMatchLength: minPartialMatchLength
-    }
+      minPartialMatchLength: minPartialMatchLength,
+      useNicknameDatabase: (document.getElementById("use-nickname-database") as HTMLInputElement)
+        .checked,
+      customNicknames: getCurrentNicknames(),
+    },
   };
 }
 
 function loadRulesConfig(rules: RulesConfig) {
   // Load Name Standardisation rule settings
   const nameRule = rules.nameStandardisation;
-  
-  (document.getElementById("name-standardisation-enabled") as HTMLInputElement).checked = nameRule.enabled;
-  (document.getElementById("partial-matches") as HTMLInputElement).checked = nameRule.allowPartialMatches;
+
+  (document.getElementById("name-standardisation-enabled") as HTMLInputElement).checked =
+    nameRule.enabled;
+  (document.getElementById("partial-matches") as HTMLInputElement).checked =
+    nameRule.allowPartialMatches;
   (document.getElementById("date-matching") as HTMLInputElement).checked = nameRule.useDateMatching;
-  (document.getElementById("first-occurrence-only") as HTMLInputElement).checked = nameRule.replaceOnlyFirstOccurrence;
-  (document.getElementById("excluded-names") as HTMLInputElement).value = nameRule.excludedNames.join(', ');
-  (document.getElementById("min-partial-match-length") as HTMLInputElement).value = (nameRule.minPartialMatchLength || 3).toString();
+  (document.getElementById("first-occurrence-only") as HTMLInputElement).checked =
+    nameRule.replaceOnlyFirstOccurrence;
+  (document.getElementById("excluded-names") as HTMLInputElement).value =
+    nameRule.excludedNames.join(", ");
+  (document.getElementById("min-partial-match-length") as HTMLInputElement).value = (
+    nameRule.minPartialMatchLength || 3
+  ).toString();
+  (document.getElementById("use-nickname-database") as HTMLInputElement).checked =
+    nameRule.useNicknameDatabase !== false;
+
+  // Load nickname database
+  const customNicknames = nameRule.customNicknames || {};
+  loadNicknameDatabase(customNicknames);
 
   // Show/hide configuration based on enabled state
   const configDiv = document.getElementById("name-standardisation-config");
   configDiv.style.display = nameRule.enabled ? "block" : "none";
+
+  // Show/hide nickname database config
+  const nicknameConfigDiv = document.getElementById("nickname-database-config");
+  nicknameConfigDiv.style.display = nameRule.useNicknameDatabase !== false ? "block" : "none";
 }
 
 function saveRules() {
   const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
 
   if (!selectedMatter) {
-    showMessage(
-      "Please select a matter from the dropdown to save rules to.",
-      "error"
-    );
+    showMessage("Please select a matter from the dropdown to save rules to.", "error");
     return;
   }
 
@@ -2113,8 +2681,8 @@ function saveRules() {
     // Update the existing profile with new rules data
     profiles[existingIndex].rules = currentRules;
     saveMatterProfiles(profiles);
-    
-    const ruleCount = Object.values(currentRules).filter(rule => rule.enabled).length;
+
+    const ruleCount = Object.values(currentRules).filter((rule) => rule.enabled).length;
     showMessage(
       `Successfully saved rules configuration (${ruleCount} rule${ruleCount !== 1 ? "s" : ""} enabled) to matter profile "${selectedMatter}".`,
       "success"
