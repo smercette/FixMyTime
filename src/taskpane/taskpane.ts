@@ -3400,25 +3400,30 @@ async function createPlaceholderEntry(
       header.toLowerCase().includes("description")
     ) {
       if (cellValue) {
-        // Replace original fee earner name with missing fee earner name in narrative
+        // Replace missing fee earner name with original fee earner name in narrative
+        // (so the new entry for B mentions A instead of B)
         let swappedNarrative = cellValue.toString();
 
-        // Try to replace first name
+        // Try to replace missing fee earner's first name with original fee earner's first name
         const originalFirstName = originalFeeEarner.split(" ")[0];
         const missingFirstName = missing.missingFeeEarner.name.split(" ")[0];
         swappedNarrative = swappedNarrative.replace(
-          new RegExp(originalFirstName, "gi"),
-          missingFirstName
+          new RegExp(missingFirstName, "gi"),
+          originalFirstName
         );
 
-        // Also try full name replacement
+        // Also try full name replacement (missing -> original)
         swappedNarrative = swappedNarrative.replace(
-          new RegExp(originalFeeEarner, "gi"),
-          missing.missingFeeEarner.name
+          new RegExp(missing.missingFeeEarner.name, "gi"),
+          originalFeeEarner
         );
 
         cellValue = swappedNarrative;
       }
+    }
+    // Handle Notes column - add Missing Time entry note
+    else if (header.toLowerCase().includes("notes")) {
+      cellValue = "Added by Missing Time rule";
     }
 
     // Set the cell value
