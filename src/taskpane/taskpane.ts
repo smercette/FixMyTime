@@ -893,6 +893,15 @@ export async function colorCodeRows() {
       const values = usedRange.values;
       for (let row = 1; row < usedRange.rowCount; row++) {
         const chargeValue = values[row][chargeColumnIndex];
+        const actualRowIndex = row - 1; // Convert to 0-based index for Missing Time tracking
+        
+        // Check if this row has Missing Time formatting priority
+        if (missingTimeRows.has(actualRowIndex)) {
+          // Skip charge formatting for rows with Missing Time formatting
+          console.log(`Preserving Missing Time formatting for row ${row} (0-based: ${actualRowIndex})`);
+          continue;
+        }
+
         const rowRange = usedRange.getRow(row);
 
         if (chargeValue === "Y") {
@@ -962,24 +971,25 @@ async function addAmendedColumn(
     amendedHeaderCell.format.borders.getItem(item).color = borderColor;
   });
 
-  // Format data cells in the new column
-  const amendedDataRange = worksheet.getRange(
-    `${amendedColumnLetter}2:${amendedColumnLetter}${usedRange.rowCount}`
-  );
-  const dataBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
-  dataBorderItems.forEach((item) => {
-    amendedDataRange.format.borders.getItem(item).style = "Continuous";
-    amendedDataRange.format.borders.getItem(item).color = borderColor;
-  });
-
-  // Apply alternating row colors if enabled
-  if (enableAlternatingRows) {
-    for (let row = 2; row <= usedRange.rowCount; row++) {
-      const cell = worksheet.getRange(`${amendedColumnLetter}${row}`);
-      if (row % 2 === 0) {
-        cell.format.fill.color = altRowColor2;
-      } else {
-        cell.format.fill.color = altRowColor1;
+  // Format data cells in the new column - using individual cell approach for consistency
+  if (usedRange.rowCount > 1) {
+    for (let row = 1; row < usedRange.rowCount; row++) {
+      const cell = worksheet.getCell(row, adjustedIndex + 1); // +1 because amended column is after original
+      
+      // Apply borders to each cell
+      const dataBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
+      dataBorderItems.forEach((item) => {
+        cell.format.borders.getItem(item as any).style = "Continuous";
+        cell.format.borders.getItem(item as any).color = borderColor;
+      });
+      
+      // Apply alternating row colors if enabled
+      if (enableAlternatingRows) {
+        if ((row + 1) % 2 === 0) {
+          cell.format.fill.color = altRowColor2;
+        } else {
+          cell.format.fill.color = altRowColor1;
+        }
       }
     }
   }
@@ -990,6 +1000,27 @@ async function addAmendedColumn(
 
   originalColumn.format.autofitColumns();
   amendedColumn.format.autofitColumns();
+  
+  // Apply max width constraints if needed
+  const maxColumnWidth =
+    parseInt((document.getElementById("max-column-width") as HTMLInputElement).value, 10) || 300;
+
+  // Load current widths to check against max
+  originalColumn.load("format/columnWidth");
+  amendedColumn.load("format/columnWidth");
+  await worksheet.context.sync();
+
+  // Apply max width to original column if needed
+  if (originalColumn.format.columnWidth > maxColumnWidth) {
+    originalColumn.format.columnWidth = maxColumnWidth;
+    originalColumn.format.wrapText = true;
+  }
+
+  // Apply max width to amended column if needed
+  if (amendedColumn.format.columnWidth > maxColumnWidth) {
+    amendedColumn.format.columnWidth = maxColumnWidth;
+    amendedColumn.format.wrapText = true;
+  }
 
   return amendedName.split(" ")[1]; // Return "Narrative" or "Time"
 }
@@ -2776,6 +2807,9 @@ function updateUndoButtonState() {
 // Apply all enabled rules
 async function applyAllRules() {
   try {
+    // Clear any previous Missing Time row tracking
+    clearMissingTimeRowTracking();
+    
     // Get current matter and its rules
     const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
     if (!selectedMatter) {
@@ -2838,6 +2872,9 @@ async function applyAllRules() {
     if (appliedRules.length > 0) {
       console.log("DEBUGGING: Skipping formatSpreadsheet() to preserve Notes");
 
+      // Recalculate column widths for content-sensitive columns
+      await recalculateColumnWidths(currentProfile);
+
       const rulesText = appliedRules.join(", ");
       showMessage(
         `Successfully applied ${rulesText}. Updated ${totalUpdatedRows} rows total. (Format reapplication disabled for debugging). Undo is available.`,
@@ -2849,6 +2886,81 @@ async function applyAllRules() {
   } catch (error) {
     console.error("Error applying rules:", error);
     showMessage("An error occurred while applying rules: " + error.message, "error");
+  }
+}
+
+
+// Global variable to track rows with Missing Time formatting (for priority handling)
+let missingTimeRows: Set<number> = new Set();
+
+// Helper function to clear Missing Time row tracking
+function clearMissingTimeRowTracking() {
+  missingTimeRows.clear();
+  console.log("Cleared Missing Time row tracking");
+}
+
+// Helper function to recalculate column widths for content-sensitive columns
+async function recalculateColumnWidths(currentProfile: any) {
+  try {
+    await Excel.run(async (context) => {
+      const worksheet = context.workbook.worksheets.getActiveWorksheet();
+      const usedRange = worksheet.getUsedRange();
+      
+      if (!usedRange) {
+        return;
+      }
+      
+      usedRange.load(["values", "columnCount"]);
+      await context.sync();
+      
+      const headers = usedRange.values[0] as string[];
+      const maxColumnWidth = currentProfile.maxColumnWidth || 300;
+      
+      // Find columns that need width recalculation
+      const columnsToRecalculate = [];
+      
+      for (let col = 0; col < headers.length; col++) {
+        const header = headers[col]?.toString().toLowerCase() || "";
+        
+        // Check for Amended Narrative, Amended Time, or Notes columns
+        if (header.includes("amended narrative") || 
+            header.includes("amended time") || 
+            header.includes("notes")) {
+          columnsToRecalculate.push({
+            index: col,
+            name: headers[col]
+          });
+        }
+      }
+      
+      console.log(`Recalculating widths for ${columnsToRecalculate.length} columns: ${columnsToRecalculate.map(c => c.name).join(", ")}`);
+      
+      // Recalculate width for each identified column
+      for (const col of columnsToRecalculate) {
+        const column = worksheet.getCell(0, col.index).getEntireColumn();
+        
+        // Auto-fit to content first
+        column.format.autofitColumns();
+        await context.sync();
+        
+        // Apply max width constraint if needed
+        column.load("format/columnWidth");
+        await context.sync();
+        
+        if (column.format.columnWidth > maxColumnWidth) {
+          column.format.columnWidth = maxColumnWidth;
+          column.format.wrapText = true;
+          console.log(`Applied max width constraint to ${col.name}: ${maxColumnWidth}pts`);
+        } else {
+          console.log(`Column ${col.name} width: ${column.format.columnWidth}pts (within limit)`);
+        }
+      }
+      
+      await context.sync();
+    });
+  } catch (error) {
+    console.error("Error recalculating column widths:", error);
+    // Don't throw error to avoid breaking the main rule application flow
   }
 }
 
@@ -3281,6 +3393,70 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
         headers = [...(newUsedRange.values[0] as string[])];
         console.log(`Created simple Notes column at index ${notesColumnIndex}`);
         console.log(`Updated headers: ${headers.join(", ")}`);
+        
+        // Apply consistent formatting to match other columns
+        const notesHeaderCell = worksheet.getCell(0, notesColumnIndex);
+        const borderColor = currentProfile.borderColor || "#D1D5DB";
+        const headerBgColor = currentProfile.headerBgColor || "#F3F4F6";
+        const headerTextColor = currentProfile.headerTextColor || "#374151";
+        
+        // Format header cell
+        notesHeaderCell.format.font.bold = true;
+        notesHeaderCell.format.fill.color = headerBgColor;
+        notesHeaderCell.format.font.color = headerTextColor;
+        notesHeaderCell.format.horizontalAlignment = "Center";
+        
+        // Apply borders to header
+        const headerBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
+        headerBorderItems.forEach((item) => {
+          notesHeaderCell.format.borders.getItem(item as any).style = "Continuous";
+          notesHeaderCell.format.borders.getItem(item as any).color = borderColor;
+        });
+        
+        // Format data cells in the new Notes column
+        if (newUsedRange.rowCount > 1) {
+          const altRowColor1 = currentProfile.altRowColor1 || "#FFFFFF";
+          const altRowColor2 = currentProfile.altRowColor2 || "#F8F9FA";
+          const enableAlternatingRows = currentProfile.enableAlternatingRows !== false;
+          
+          // Apply formatting to each data cell individually
+          for (let row = 1; row < newUsedRange.rowCount; row++) {
+            const cell = worksheet.getCell(row, notesColumnIndex);
+            
+            // Apply borders to each cell
+            const dataBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
+            dataBorderItems.forEach((item) => {
+              cell.format.borders.getItem(item as any).style = "Continuous";
+              cell.format.borders.getItem(item as any).color = borderColor;
+            });
+            
+            // Apply alternating row colors if enabled
+            if (enableAlternatingRows) {
+              if ((row + 1) % 2 === 0) {
+                cell.format.fill.color = altRowColor2;
+              } else {
+                cell.format.fill.color = altRowColor1;
+              }
+            }
+          }
+        }
+        
+        await context.sync();
+        
+        // Auto-fit the new Notes column width, respecting max width setting
+        const notesColumn = worksheet.getCell(0, notesColumnIndex).getEntireColumn();
+        notesColumn.format.autofitColumns();
+        await context.sync();
+        
+        // Apply max width constraint if needed
+        const maxColumnWidth = currentProfile.maxColumnWidth || 300;
+        notesColumn.load("format/columnWidth");
+        await context.sync();
+        
+        if (notesColumn.format.columnWidth > maxColumnWidth) {
+          notesColumn.format.columnWidth = maxColumnWidth;
+          notesColumn.format.wrapText = true;
+        }
       } else {
         console.log(`Found existing Notes column at index ${notesColumnIndex}`);
       }
@@ -3320,6 +3496,9 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
           // Apply pale blue formatting to the entire row to highlight missing time
           const rowRange = worksheet.getCell(rowIndex, 0).getEntireRow();
           rowRange.format.fill.color = "#E3F2FD"; // Pale blue background
+          
+          // Track this row as having Missing Time formatting for priority handling
+          missingTimeRows.add(rowIndex);
 
           await context.sync();
           updatedCount++;
