@@ -659,6 +659,7 @@ async function createNotesColumnWithFormatting(
   
   const insertAfterColumn = usedRange.columnCount - 1;
   const newColumnIndex = usedRange.columnCount; // Store before insertion
+  const originalRowCount = usedRange.rowCount; // Store before insertion
 
   // Insert new column at the far right
   const insertColumn = worksheet.getCell(0, newColumnIndex).getEntireColumn();
@@ -700,8 +701,8 @@ async function createNotesColumnWithFormatting(
     });
 
     // Format data cells (rows 2 onwards)
-    if (usedRange.rowCount > 1) {
-      const dataRange = worksheet.getRangeByIndexes(1, notesColumnIndex, usedRange.rowCount - 1, 1);
+    if (originalRowCount > 1) {
+      const dataRange = worksheet.getRangeByIndexes(1, notesColumnIndex, originalRowCount - 1, 1);
 
       // Apply borders to all data cells
       borderItems.forEach((item) => {
@@ -716,7 +717,7 @@ async function createNotesColumnWithFormatting(
 
       // Apply alternating row colors if enabled
       if (enableAlternatingRows) {
-        for (let row = 1; row < usedRange.rowCount; row++) {
+        for (let row = 1; row < originalRowCount; row++) {
           const cell = worksheet.getCell(row, notesColumnIndex);
           if (row % 2 === 0) {
             cell.format.fill.color = altRowColor2;
@@ -824,6 +825,35 @@ function showMessage(message: string, type: string) {
   setTimeout(() => {
     messageDiv.style.display = "none";
   }, 5000);
+}
+
+function showDebugMessage(message: string) {
+  // Add to persistent debug area
+  addDebugInfo(message);
+  
+  // Also show temporary message
+  const messageDiv = document.getElementById("message");
+  const messageText = document.getElementById("message-text");
+
+  messageText.textContent = message;
+  messageDiv.style.display = "block";
+  messageDiv.className = "ms-MessageBar ms-MessageBar--info";
+
+  // Hide message after 15 seconds for debug messages
+  setTimeout(() => {
+    messageDiv.style.display = "none";
+  }, 15000);
+}
+
+function addDebugInfo(message: string) {
+  const debugArea = document.getElementById("debug-area");
+  const debugContent = document.getElementById("debug-content");
+  
+  if (debugArea && debugContent) {
+    debugArea.style.display = "block";
+    const timestamp = new Date().toLocaleTimeString();
+    debugContent.innerHTML += `\n[${timestamp}] ${message}`;
+  }
 }
 
 export async function colorCodeRows() {
@@ -2871,8 +2901,8 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
       usedRange.load(["values", "rowCount", "columnCount"]);
       await context.sync();
 
-      // Parse data into structured format
-      const headers = usedRange.values[0] as string[];
+      // Parse data into structured format (create mutable copy of headers)
+      let headers = [...(usedRange.values[0] as string[])];
       const entries = [];
       
       console.log(`DEBUG: Headers found: ${headers.join(", ")}`);
@@ -2953,7 +2983,7 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
       );
 
       // Get fee earners list for name matching
-      const feeEarners = currentProfile.participants?.feeEarners || [];
+      const feeEarners = currentProfile.feeEarners || [];
       console.log(`Fee earners available: ${feeEarners.map((fe) => fe.name).join(", ")}`);
       console.log(`Meeting keywords: ${missingTimeRule.meetingKeywords.join(", ")}`);
       console.log(`Date tolerance: ${missingTimeRule.dateTolerance} days`);
@@ -2974,6 +3004,8 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
       // Process each entry looking for meeting keywords
       let processedCount = 0;
       let meetingEntriesFound = 0;
+      
+      addDebugInfo(`Processing ${entries.length} total entries`);
 
       for (const entry of entries) {
         processedCount++;
@@ -3000,6 +3032,11 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
           );
         }
 
+        // Debug first few entries
+        if (processedCount <= 3) {
+          addDebugInfo(`Entry ${processedCount}: Narrative="${narrative.substring(0, 60)}..."`);
+        }
+
         // Check if narrative contains meeting keywords (with word boundary check)
         const containsMeetingKeyword = missingTimeRule.meetingKeywords.some((keyword) => {
           // Escape special regex characters
@@ -3012,6 +3049,7 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
             console.log(
               `  Entry ${processedCount}: Keyword "${keyword}" matched in: "${narrative.substring(0, 80)}..."`
             );
+            addDebugInfo(`Found keyword "${keyword}" in entry ${processedCount}`);
           }
           return matches;
         });
@@ -3021,6 +3059,8 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
           console.log(
             `Found meeting entry ${meetingEntriesFound}: "${narrative}" by ${entryFeeEarner} on ${entryDate}`
           );
+          
+          addDebugInfo(`Meeting ${meetingEntriesFound}: ${entryFeeEarner} on ${entryDate}`);
 
           // Show first few meeting entries found (to avoid spam)
           if (meetingEntriesFound <= 3) {
@@ -3038,6 +3078,8 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
           });
           console.log(`  Matched keyword: "${matchedKeyword}"`);
           console.log(`  Now searching for fee earner names in narrative...`);
+          addDebugInfo(`Checking ${feeEarners.length} fee earners against narrative`);
+          
           // Find mentioned fee earners in the narrative
           const mentionedFeeEarners = feeEarners
             .filter((feeEarner) => {
@@ -3064,6 +3106,7 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
                 console.log(
                   `  Found mentioned fee earner: ${feeEarner.name} in narrative: "${narrative.substring(0, 100)}..."`
                 );
+                addDebugInfo(`Found mentioned: ${feeEarner.name}`);
               } else {
                 // Additional debug logging for names that weren't matched
                 if (
@@ -3184,13 +3227,15 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
       
       // If no meeting entries were found, provide more detail
       if (meetingEntriesFound === 0) {
+        const debugMsg = `No meetings found. Keywords: ${missingTimeRule.meetingKeywords.join(", ")}`;
         console.log("WARNING: No meeting entries found!");
         console.log("Check that:");
         console.log("  1. Meeting keywords are configured correctly");
         console.log("  2. Narratives contain these keywords with word boundaries");
         console.log("  3. The narrative column is being read correctly");
+        addDebugInfo(debugMsg);
         showMessage(
-          "Missing Time rule found no entries with meeting keywords. Check console for details.",
+          "Missing Time rule found no entries with meeting keywords. Check debug area for details.",
           "warning"
         );
       }
@@ -3210,21 +3255,42 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
       let notesColumnIndex = findNotesColumn(headerRow);
 
       if (notesColumnIndex === -1) {
-        console.log("Notes column not found, creating new one...");
-        notesColumnIndex = await createNotesColumnWithFormatting(worksheet, usedRange);
-        // Reload used range AND headers after adding column
-        usedRange = worksheet.getUsedRange();
-        usedRange.load(["values", "rowCount", "columnCount"]);
+        console.log("Notes column not found, creating simple Notes column...");
+        
+        // Create a simple Notes column without complex formatting
+        const originalColumnCount = usedRange.columnCount;
+        const newColumnIndex = originalColumnCount;
+        
+        // Insert column at the end
+        const insertColumn = worksheet.getCell(0, newColumnIndex).getEntireColumn();
+        insertColumn.insert(Excel.InsertShiftDirection.right);
+        
+        // Set header
+        const headerCell = worksheet.getCell(0, newColumnIndex);
+        headerCell.values = [["Notes"]];
+        
+        // Set the notes column index
+        notesColumnIndex = newColumnIndex;
+        
+        // Get fresh usedRange after column insertion
+        const newUsedRange = worksheet.getUsedRange();
+        newUsedRange.load(["values", "rowCount", "columnCount"]);
         await context.sync();
         
-        // Re-read headers after column insertion
-        headers = usedRange.values[0] as string[];
-        console.log(`Created Notes column at index ${notesColumnIndex}`);
+        // Update our working variables (create a new array to avoid read-only issues)
+        headers = [...(newUsedRange.values[0] as string[])];
+        console.log(`Created simple Notes column at index ${notesColumnIndex}`);
         console.log(`Updated headers: ${headers.join(", ")}`);
       } else {
         console.log(`Found existing Notes column at index ${notesColumnIndex}`);
       }
 
+      console.log(`DEBUG: About to process ${missingEntries.length} missing entries`);
+      console.log(`DEBUG: Notes column index is ${notesColumnIndex}`);
+      
+      // Show visible debug message with longer timeout
+      showDebugMessage(`DEBUG: Found ${missingEntries.length} missing entries, Notes column at index ${notesColumnIndex}`);
+      
       let updatedCount = 0;
       for (const missing of missingEntries) {
         const rowIndex = missing.originalEntry.rowIndex;
