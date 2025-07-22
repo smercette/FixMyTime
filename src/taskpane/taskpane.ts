@@ -3294,7 +3294,7 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
       let updatedCount = 0;
       for (const missing of missingEntries) {
         const rowIndex = missing.originalEntry.rowIndex;
-        const noteText = `Missing Time: ${missing.missingFeeEarner.name} should have entry for ${missing.date}`;
+        const noteText = `Missing Time`;
 
         // Get current Notes cell value and update it
         const notesCell = worksheet.getCell(rowIndex, notesColumnIndex);
@@ -3423,7 +3423,7 @@ async function createPlaceholderEntry(
     }
     // Handle Notes column - add Missing Time entry note
     else if (header.toLowerCase().includes("notes")) {
-      cellValue = "Added by Missing Time rule";
+      cellValue = "Added - Missing Time";
     }
 
     // Set the cell value
