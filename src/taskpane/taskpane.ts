@@ -2864,6 +2864,9 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
       // Parse data into structured format
       const headers = usedRange.values[0] as string[];
       const entries = [];
+      
+      console.log(`DEBUG: Headers found: ${headers.join(", ")}`);
+      console.log(`DEBUG: Total rows in sheet: ${usedRange.values.length}`);
 
       for (let i = 1; i < usedRange.values.length; i++) {
         const row = usedRange.values[i];
@@ -2874,6 +2877,13 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
         });
 
         entries.push(entry);
+      }
+      
+      console.log(`DEBUG: Created ${entries.length} entries from data`);
+      if (entries.length > 0) {
+        console.log(`DEBUG: First entry structure:`, Object.keys(entries[0])
+          .map(k => `${k}: ${entries[0][k]}`)
+          .join(", "));
       }
 
       // Find required columns with more flexible matching
@@ -2910,6 +2920,17 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
       });
 
       if (feeEarnerCol === -1 || dateCol === -1 || narrativeCol === -1) {
+        console.log(`ERROR: Column detection failed:`);
+        console.log(`  - Fee Earner column index: ${feeEarnerCol}`);
+        console.log(`  - Date column index: ${dateCol}`);
+        console.log(`  - Narrative column index: ${narrativeCol}`);
+        console.log(`  - Available headers: ${headers.map((h, i) => `[${i}] "${h}"`).join(", ")}`);
+        
+        showMessage(
+          `Missing Time rule failed: Cannot find required columns. Fee Earner: ${feeEarnerCol >= 0 ? "✓" : "✗"}, Date: ${dateCol >= 0 ? "✓" : "✗"}, Narrative: ${narrativeCol >= 0 ? "✓" : "✗"}`,
+          "error"
+        );
+        
         return {
           success: false,
           updatedRows: 0,
@@ -2998,6 +3019,15 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
               "info"
             );
           }
+          
+          // Debug: Show which keyword matched
+          const matchedKeyword = missingTimeRule.meetingKeywords.find((keyword) => {
+            const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const keywordRegex = new RegExp(`\\b${escapeRegex(keyword.toLowerCase())}\\b`, "i");
+            return keywordRegex.test(narrative);
+          });
+          console.log(`  Matched keyword: "${matchedKeyword}"`);
+          console.log(`  Now searching for fee earner names in narrative...`);
           // Find mentioned fee earners in the narrative
           const mentionedFeeEarners = feeEarners
             .filter((feeEarner) => {
@@ -3062,8 +3092,15 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
                 .toString()
                 .toLowerCase();
 
-              // Check if it's the right fee earner
-              if (otherFeeEarner !== mentionedFeeEarner.name) return false;
+              // Check if it's the right fee earner (case-insensitive comparison)
+              if (otherFeeEarner.toLowerCase() !== mentionedFeeEarner.name.toLowerCase()) {
+                // Debug log only for Callum entries
+                if (mentionedFeeEarner.name.toLowerCase().includes("callum") && 
+                    otherFeeEarner.toLowerCase().includes("callum")) {
+                  console.log(`      Name mismatch: "${otherFeeEarner}" !== "${mentionedFeeEarner.name}"`);
+                }
+                return false;
+              }
 
               // Check date match (considering tolerance)
               const datesMatch = datesWithinTolerance(
@@ -3078,17 +3115,34 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
               }
               if (!datesMatch) return false;
 
-              // Optionally check if the reciprocal narrative mentions the original fee earner
+              // Check if the reciprocal narrative mentions the original fee earner AND contains meeting keywords
               const originalFirstName = entryFeeEarner.split(" ")[0].toLowerCase();
               const originalFullName = entryFeeEarner.toLowerCase();
-
-              return (
-                otherNarrative.includes(originalFirstName) ||
-                otherNarrative.includes(originalFullName) ||
-                missingTimeRule.meetingKeywords.some((keyword) =>
-                  otherNarrative.includes(keyword.toLowerCase())
-                )
-              );
+              
+              // Escape special regex characters
+              const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+              
+              // Check if original fee earner is mentioned (using word boundaries)
+              const firstNameRegex = new RegExp(`\\b${escapeRegex(originalFirstName)}\\b`, "i");
+              const fullNameRegex = new RegExp(`\\b${escapeRegex(originalFullName)}\\b`, "i");
+              const mentionsOriginalFeeEarner = firstNameRegex.test(otherNarrative) || fullNameRegex.test(otherNarrative);
+              
+              // Check if narrative contains meeting keywords
+              const containsMeetingKeyword = missingTimeRule.meetingKeywords.some((keyword) => {
+                const keywordRegex = new RegExp(`\\b${escapeRegex(keyword.toLowerCase())}\\b`, "i");
+                return keywordRegex.test(otherNarrative);
+              });
+              
+              // Debug logging for Callum entries
+              if (mentionedFeeEarner.name.toLowerCase().includes("callum")) {
+                console.log(`      Checking reciprocal for ${mentionedFeeEarner.name}:`);
+                console.log(`        - Other narrative: "${otherNarrative.substring(0, 100)}..."`);
+                console.log(`        - Mentions original fee earner (${entryFeeEarner})? ${mentionsOriginalFeeEarner}`);
+                console.log(`        - Contains meeting keyword? ${containsMeetingKeyword}`);
+              }
+              
+              // BOTH conditions must be met
+              return mentionsOriginalFeeEarner && containsMeetingKeyword;
             });
 
             if (!hasReciprocalEntry) {
@@ -3117,6 +3171,28 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
         `DEBUG: Processed ${processedCount} entries, found ${meetingEntriesFound} meeting entries, identified ${missingEntries.length} missing reciprocal entries`,
         "info"
       );
+      
+      // If no meeting entries were found, provide more detail
+      if (meetingEntriesFound === 0) {
+        console.log("WARNING: No meeting entries found!");
+        console.log("Check that:");
+        console.log("  1. Meeting keywords are configured correctly");
+        console.log("  2. Narratives contain these keywords with word boundaries");
+        console.log("  3. The narrative column is being read correctly");
+        showMessage(
+          "Missing Time rule found no entries with meeting keywords. Check console for details.",
+          "warning"
+        );
+      }
+      
+      // If meeting entries found but no missing entries identified
+      if (meetingEntriesFound > 0 && missingEntries.length === 0) {
+        console.log("INFO: Meeting entries found but no missing reciprocal entries");
+        console.log("This could mean:");
+        console.log("  1. All fee earners have reciprocal entries");
+        console.log("  2. No fee earner names were found in narratives");
+        console.log("  3. Fee earner names don't match between spreadsheet and configuration");
+      }
 
       // Add notes to rows about missing entries and apply formatting
       // Get the header row to find Notes column
