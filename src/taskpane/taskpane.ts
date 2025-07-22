@@ -39,7 +39,7 @@ Office.onReady((info) => {
     document.getElementById("save-participants").onclick = saveParticipants;
 
     // Rules functionality
-    document.getElementById("save-rules").onclick = saveRules;
+    document.getElementById("save-rule-settings").onclick = saveRuleSettings;
     document.getElementById("undo-name-rules").onclick = undoNameStandardisation;
 
     // Nickname database functionality
@@ -62,6 +62,15 @@ Office.onReady((info) => {
       configDiv.style.display = nameStandardisationToggle.checked ? "block" : "none";
     };
 
+    // Missing Time Entries rule toggle
+    const missingTimeEntriesToggle = document.getElementById(
+      "missing-time-entries-enabled"
+    ) as HTMLInputElement;
+    missingTimeEntriesToggle.onchange = () => {
+      const configDiv = document.getElementById("missing-time-entries-content");
+      configDiv.style.display = missingTimeEntriesToggle.checked ? "block" : "none";
+    };
+
     // Make functions available globally for onclick handlers
     (window as any).removeFeeEarnerRow = removeFeeEarnerRow;
     (window as any).removeNicknameEntry = removeNicknameEntry;
@@ -69,11 +78,22 @@ Office.onReady((info) => {
     // Handle matter selection from dropdown
     const matterSelect = document.getElementById("matter-select") as HTMLSelectElement;
     matterSelect.onchange = () => {
-      if (matterSelect.value) {
+      if (matterSelect.value === "__new__") {
+        // Show new matter creation section and switch to Settings tab
+        document.getElementById("new-matter-section").style.display = "block";
+        switchToSettingsTab();
+        // Hide Quick Actions section
+        document.getElementById("quick-actions-section").style.display = "none";
+      } else if (matterSelect.value) {
+        // Load existing matter profile
         loadMatterProfile();
+        // Hide new matter creation section
+        document.getElementById("new-matter-section").style.display = "none";
       } else {
         // Hide Quick Actions section when no matter is selected
         document.getElementById("quick-actions-section").style.display = "none";
+        // Hide new matter creation section
+        document.getElementById("new-matter-section").style.display = "none";
       }
     };
 
@@ -149,7 +169,7 @@ async function applyFormatting() {
     await formatSpreadsheet();
     await addColumns();
     await colorCodeRows();
-    
+
     showMessage("Formatting applied successfully.", "success");
   } catch (error) {
     console.error("Error applying formatting:", error);
@@ -625,7 +645,10 @@ async function createNotesColumn(worksheet: Excel.Worksheet, insertAfterColumn: 
   return insertAfterColumn + 1;
 }
 
-async function createNotesColumnWithFormatting(worksheet: Excel.Worksheet, usedRange: Excel.Range) {
+async function createNotesColumnWithFormatting(
+  worksheet: Excel.Worksheet,
+  usedRange: Excel.Range
+): Promise<number> {
   const insertAfterColumn = usedRange.columnCount - 1;
 
   // Insert new column at the far right
@@ -1101,8 +1124,17 @@ interface NameStandardisationRule {
   customNicknames?: Record<string, string>; // nickname -> full name mapping
 }
 
+interface MissingTimeEntriesRule {
+  enabled: boolean;
+  dateTolerance: number; // days ±0 for exact match
+  meetingKeywords: string[]; // words that indicate meetings/calls
+  requireExactTimeMatch: boolean; // optional stricter matching
+  createMissingEntries: boolean; // auto-create placeholder entries
+}
+
 interface RulesConfig {
   nameStandardisation: NameStandardisationRule;
+  missingTimeEntries: MissingTimeEntriesRule;
 }
 
 // Built-in nickname database
@@ -1304,16 +1336,100 @@ function loadMatterProfiles() {
   const profiles = getMatterProfiles();
   const selectElement = document.getElementById("matter-select") as HTMLSelectElement;
 
-  // Clear existing options except the first one
+  // Clear existing options and rebuild with default options
   selectElement.innerHTML = '<option value="">-- Select a Matter --</option>';
 
-  // Add saved profiles
-  profiles.forEach((profile) => {
+  // Debug: Show what matters are currently saved (temporary)
+  console.log(
+    `DEBUG: Loaded ${profiles.length} matter profiles:`,
+    profiles.map((p) => p.name).join(", ")
+  );
+
+  // If no profiles exist, create a default one
+  if (profiles.length === 0) {
+    console.log("No matter profiles found - they may have been cleared from localStorage");
+
+    // Create a default "Project Apricot" matter profile to help user get started
+    const defaultProfile: MatterProfile = {
+      name: "Project Apricot",
+      headerBgColor: "#4472C4",
+      headerTextColor: "#FFFFFF",
+      altRowColor1: "#FFFFFF",
+      altRowColor2: "#F8F9FA",
+      borderColor: "#D1D5DB",
+      enableAlternatingRows: true,
+      maxColumnWidth: 300,
+      verticalAlignment: "center",
+      columnHeader: "Charge",
+      columnPosition: "next",
+      prepopulateCharge: false,
+      noChargeKeywords: ["NC", "DO NOT CHARGE", "Non Chargeable"],
+      addAmendedNarrative: false,
+      addAmendedTime: false,
+      addNotesColumn: true,
+      participants: {
+        feeEarners: [
+          {
+            name: "John Smith",
+            role: "Partner",
+            rate: 500,
+            email: "john.smith@example.com",
+            useAsDefault: true,
+            billingContact: false,
+          },
+          {
+            name: "Jane Doe",
+            role: "Associate",
+            rate: 300,
+            email: "jane.doe@example.com",
+            useAsDefault: false,
+            billingContact: false,
+          },
+        ],
+      },
+      rules: {
+        nameStandardisation: {
+          enabled: false,
+          caseSensitive: false,
+          allowPartialMatches: true,
+          useDateMatching: true,
+          replaceOnlyFirstOccurrence: true,
+          excludedNames: [],
+          minPartialMatchLength: 3,
+          useNicknameDatabase: true,
+          customNicknames: {},
+        },
+        missingTimeEntries: {
+          enabled: false,
+          dateTolerance: 0,
+          meetingKeywords: ["meeting", "call", "conference", "discussion", "telephone", "phone"],
+          requireExactTimeMatch: false,
+          createMissingEntries: false,
+        },
+      },
+    };
+
+    saveMatterProfiles([defaultProfile]);
+    console.log("Created default 'Project Apricot' matter profile");
+  }
+
+  // Get current profiles (including any newly created default)
+  const currentProfiles = getMatterProfiles();
+
+  // Add all saved profiles to the dropdown
+  currentProfiles.forEach((profile) => {
     const option = document.createElement("option");
     option.value = profile.name;
     option.textContent = profile.name;
     selectElement.appendChild(option);
   });
+
+  // Add the "Add New Matter" option at the end
+  const addNewOption = document.createElement("option");
+  addNewOption.value = "__new__";
+  addNewOption.textContent = "+ Add New Matter";
+  addNewOption.style.fontStyle = "italic";
+  selectElement.appendChild(addNewOption);
 
   // If a matter is loaded, update the dropdown
   if (currentMatterLoaded) {
@@ -2634,6 +2750,15 @@ async function applyAllRules() {
       return;
     }
 
+    // DEBUG: Show what rules are enabled
+    const nameStandardisationEnabled = currentProfile.rules.nameStandardisation?.enabled || false;
+    const missingTimeEnabled = currentProfile.rules.missingTimeEntries?.enabled || false;
+
+    showMessage(
+      `DEBUG: Starting rules for ${selectedMatter}. Name Standardisation: ${nameStandardisationEnabled ? "ENABLED" : "disabled"}, Missing Time: ${missingTimeEnabled ? "ENABLED" : "disabled"}`,
+      "info"
+    );
+
     let appliedRules = [];
     let totalUpdatedRows = 0;
 
@@ -2651,24 +2776,31 @@ async function applyAllRules() {
       }
     }
 
-    // Future rules can be added here following the same pattern
-    // if (currentProfile.rules.missingTimeEntries?.enabled) {
-    //   const result = await applyMissingTimeEntriesRule();
-    //   if (result.success) {
-    //     appliedRules.push("Missing Time Entries");
-    //     totalUpdatedRows += result.updatedRows;
-    //   }
-    // }
+    // Apply Missing Time Entries Rule if enabled
+    if (currentProfile.rules.missingTimeEntries?.enabled) {
+      showMessage("Applying Missing Time Entries rule...", "info");
 
-    // Show final result and reapply formatting
+      const result = await applyMissingTimeEntriesRuleWithResult();
+
+      if (result.success) {
+        appliedRules.push("Missing Time Entries");
+        totalUpdatedRows += result.updatedRows;
+        showMessage(`Missing Time Entries completed: ${result.updatedRows} rows updated`, "info");
+      } else if (result.error) {
+        showMessage(`Missing Time Entries failed: ${result.error}`, "error");
+        return;
+      }
+    } else {
+      showMessage("Missing Time Entries rule is disabled - skipping", "info");
+    }
+
+    // Show final result (temporarily disabling formatting reapplication to debug Notes issue)
     if (appliedRules.length > 0) {
-      // Reapply formatting to maintain consistency after rules are applied
-      showMessage("Reapplying formatting to maintain consistency...", "info");
-      await formatSpreadsheet();
-      
+      console.log("DEBUGGING: Skipping formatSpreadsheet() to preserve Notes");
+
       const rulesText = appliedRules.join(", ");
       showMessage(
-        `Successfully applied ${rulesText}. Updated ${totalUpdatedRows} rows total. Formatting reapplied. Undo is available.`,
+        `Successfully applied ${rulesText}. Updated ${totalUpdatedRows} rows total. (Format reapplication disabled for debugging). Undo is available.`,
         "success"
       );
     } else {
@@ -2691,6 +2823,483 @@ async function applyNameStandardisationRuleWithResult(): Promise<{
     return { success: true, updatedRows: updatedCount };
   } catch (error) {
     return { success: false, updatedRows: 0, error: error.message };
+  }
+}
+
+// Missing Time Entries rule implementation
+async function applyMissingTimeEntriesRuleWithResult(): Promise<{
+  success: boolean;
+  updatedRows: number;
+  error?: string;
+}> {
+  try {
+    // Get current matter and its rules
+    const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+    if (!selectedMatter) {
+      return { success: false, updatedRows: 0, error: "No matter selected" };
+    }
+
+    const profiles = getMatterProfiles();
+    const currentProfile = profiles.find((p) => p.name === selectedMatter);
+    if (!currentProfile || !currentProfile.rules || !currentProfile.rules.missingTimeEntries) {
+      return { success: false, updatedRows: 0, error: "Missing time entries rule not configured" };
+    }
+
+    const missingTimeRule = currentProfile.rules.missingTimeEntries;
+    if (!missingTimeRule.enabled) {
+      return { success: false, updatedRows: 0, error: "Missing time entries rule not enabled" };
+    }
+
+    return await Excel.run(async (context) => {
+      const worksheet = context.workbook.worksheets.getActiveWorksheet();
+      const usedRange = worksheet.getUsedRange();
+
+      if (!usedRange) {
+        return { success: false, updatedRows: 0, error: "No data found in worksheet" };
+      }
+
+      usedRange.load(["values", "rowCount", "columnCount"]);
+      await context.sync();
+
+      // Parse data into structured format
+      const headers = usedRange.values[0] as string[];
+      const entries = [];
+
+      for (let i = 1; i < usedRange.values.length; i++) {
+        const row = usedRange.values[i];
+        const entry: any = { rowIndex: i };
+
+        headers.forEach((header, colIndex) => {
+          entry[header.toLowerCase().replace(/\s+/g, "_")] = row[colIndex];
+        });
+
+        entries.push(entry);
+      }
+
+      // Find required columns with more flexible matching
+      const feeEarnerCol = headers.findIndex((h) => {
+        const headerLower = h.toLowerCase();
+        return (
+          (headerLower.includes("fee") && headerLower.includes("earner")) ||
+          headerLower.includes("name") ||
+          headerLower.includes("person") ||
+          headerLower.includes("who") ||
+          headerLower.includes("user")
+        );
+      });
+
+      const dateCol = headers.findIndex((h) => {
+        const headerLower = h.toLowerCase();
+        return (
+          headerLower.includes("date") ||
+          headerLower.includes("day") ||
+          headerLower.includes("when")
+        );
+      });
+
+      const narrativeCol = headers.findIndex((h) => {
+        const headerLower = h.toLowerCase();
+        return (
+          headerLower.includes("narrative") ||
+          headerLower.includes("description") ||
+          headerLower.includes("note") ||
+          headerLower.includes("detail") ||
+          headerLower.includes("work") ||
+          headerLower.includes("activity")
+        );
+      });
+
+      if (feeEarnerCol === -1 || dateCol === -1 || narrativeCol === -1) {
+        return {
+          success: false,
+          updatedRows: 0,
+          error: `Required columns not found. Found: FeeEarner(${feeEarnerCol}), Date(${dateCol}), Narrative(${narrativeCol}). Headers: ${headers.join(", ")}`,
+        };
+      }
+
+      console.log(
+        `Missing Time Rule: Using columns - FeeEarner: ${headers[feeEarnerCol]}, Date: ${headers[dateCol]}, Narrative: ${headers[narrativeCol]}`
+      );
+
+      // Get fee earners list for name matching
+      const feeEarners = currentProfile.participants?.feeEarners || [];
+      console.log(`Fee earners available: ${feeEarners.map((fe) => fe.name).join(", ")}`);
+      console.log(`Meeting keywords: ${missingTimeRule.meetingKeywords.join(", ")}`);
+      console.log(`Date tolerance: ${missingTimeRule.dateTolerance} days`);
+      console.log(`Total entries to process: ${entries.length}`);
+
+      // Show initial debugging info
+      showMessage(
+        `DEBUG: Starting with ${entries.length} entries, ${feeEarners.length} fee earners: ${feeEarners.map((fe) => fe.name).join(", ")}`,
+        "info"
+      );
+      showMessage(
+        `DEBUG: Meeting keywords: "${missingTimeRule.meetingKeywords.join('", "')}"`,
+        "info"
+      );
+
+      const missingEntries = [];
+
+      // Process each entry looking for meeting keywords
+      let processedCount = 0;
+      let meetingEntriesFound = 0;
+
+      for (const entry of entries) {
+        processedCount++;
+        const narrative = (entry[headers[narrativeCol].toLowerCase().replace(/\s+/g, "_")] || "")
+          .toString()
+          .toLowerCase();
+        const entryFeeEarner = (
+          entry[headers[feeEarnerCol].toLowerCase().replace(/\s+/g, "_")] || ""
+        ).toString();
+        const entryDate = entry[headers[dateCol].toLowerCase().replace(/\s+/g, "_")];
+
+        // Skip if no narrative or missing key data
+        if (!narrative || !entryFeeEarner || !entryDate) {
+          console.log(
+            `Skipping entry ${processedCount}: missing data - narrative: ${!!narrative}, feeEarner: ${!!entryFeeEarner}, date: ${!!entryDate}`
+          );
+          continue;
+        }
+
+        // Debug log for Callum Reyes entries
+        if (narrative.includes("callum") || narrative.includes("reyes")) {
+          console.log(
+            `DEBUG: Found potential Callum Reyes entry - Row: ${entry.rowIndex}, Narrative: "${narrative}", FeeEarner: "${entryFeeEarner}", Date: "${entryDate}"`
+          );
+        }
+
+        // Check if narrative contains meeting keywords (with word boundary check)
+        const containsMeetingKeyword = missingTimeRule.meetingKeywords.some((keyword) => {
+          // Escape special regex characters
+          const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+          // Create a regex for word boundary matching
+          const keywordRegex = new RegExp(`\\b${escapeRegex(keyword.toLowerCase())}\\b`, "i");
+          const matches = keywordRegex.test(narrative);
+          if (matches && processedCount <= 5) {
+            console.log(
+              `  Entry ${processedCount}: Keyword "${keyword}" matched in: "${narrative.substring(0, 80)}..."`
+            );
+          }
+          return matches;
+        });
+
+        if (containsMeetingKeyword) {
+          meetingEntriesFound++;
+          console.log(
+            `Found meeting entry ${meetingEntriesFound}: "${narrative}" by ${entryFeeEarner} on ${entryDate}`
+          );
+
+          // Show first few meeting entries found (to avoid spam)
+          if (meetingEntriesFound <= 3) {
+            showMessage(
+              `DEBUG: Found meeting entry ${meetingEntriesFound}: "${narrative.substring(0, 50)}..." by ${entryFeeEarner}`,
+              "info"
+            );
+          }
+          // Find mentioned fee earners in the narrative
+          const mentionedFeeEarners = feeEarners
+            .filter((feeEarner) => {
+              const firstName = feeEarner.name.split(" ")[0].toLowerCase();
+              const lastName = feeEarner.name.split(" ").slice(1).join(" ").toLowerCase();
+              const fullName = feeEarner.name.toLowerCase();
+
+              // Escape special regex characters
+              const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+              // Create word boundary regex patterns to match names more accurately
+              const firstNameRegex = new RegExp(`\\b${escapeRegex(firstName)}\\b`, "i");
+              const lastNameRegex = lastName
+                ? new RegExp(`\\b${escapeRegex(lastName)}\\b`, "i")
+                : null;
+              const fullNameRegex = new RegExp(`\\b${escapeRegex(fullName)}\\b`, "i");
+
+              // Check various name patterns
+              const ismentioned =
+                fullNameRegex.test(narrative) ||
+                (firstNameRegex.test(narrative) && lastNameRegex && lastNameRegex.test(narrative));
+
+              if (ismentioned) {
+                console.log(
+                  `  Found mentioned fee earner: ${feeEarner.name} in narrative: "${narrative.substring(0, 100)}..."`
+                );
+              } else {
+                // Additional debug logging for names that weren't matched
+                if (
+                  narrative.toLowerCase().includes(firstName) ||
+                  narrative.toLowerCase().includes(fullName)
+                ) {
+                  console.log(
+                    `  DEBUG: ${feeEarner.name} partially matches but failed regex test in: "${narrative.substring(0, 100)}..."`
+                  );
+                }
+              }
+              return ismentioned;
+            })
+            .filter((feeEarner) => {
+              const isDifferentPerson = feeEarner.name !== entryFeeEarner;
+              if (!isDifferentPerson) {
+                console.log(`  Excluding ${feeEarner.name} as they are the entry creator`);
+              }
+              return isDifferentPerson;
+            });
+
+          console.log(
+            `  Final mentioned fee earners for reciprocal check: ${mentionedFeeEarners.map((fe) => fe.name).join(", ")}`
+          );
+
+          // Check if mentioned fee earners have reciprocal entries
+          for (const mentionedFeeEarner of mentionedFeeEarners) {
+            const hasReciprocalEntry = entries.some((otherEntry) => {
+              const otherFeeEarner = (
+                otherEntry[headers[feeEarnerCol].toLowerCase().replace(/\s+/g, "_")] || ""
+              ).toString();
+              const otherDate = otherEntry[headers[dateCol].toLowerCase().replace(/\s+/g, "_")];
+              const otherNarrative = (
+                otherEntry[headers[narrativeCol].toLowerCase().replace(/\s+/g, "_")] || ""
+              )
+                .toString()
+                .toLowerCase();
+
+              // Check if it's the right fee earner
+              if (otherFeeEarner !== mentionedFeeEarner.name) return false;
+
+              // Check date match (considering tolerance)
+              const datesMatch = datesWithinTolerance(
+                entryDate,
+                otherDate,
+                missingTimeRule.dateTolerance
+              );
+              if (!datesMatch && mentionedFeeEarner.name.toLowerCase().includes("callum")) {
+                console.log(
+                  `      Date mismatch for ${mentionedFeeEarner.name}: entry date ${entryDate} vs other date ${otherDate}`
+                );
+              }
+              if (!datesMatch) return false;
+
+              // Optionally check if the reciprocal narrative mentions the original fee earner
+              const originalFirstName = entryFeeEarner.split(" ")[0].toLowerCase();
+              const originalFullName = entryFeeEarner.toLowerCase();
+
+              return (
+                otherNarrative.includes(originalFirstName) ||
+                otherNarrative.includes(originalFullName) ||
+                missingTimeRule.meetingKeywords.some((keyword) =>
+                  otherNarrative.includes(keyword.toLowerCase())
+                )
+              );
+            });
+
+            if (!hasReciprocalEntry) {
+              console.log(
+                `    Missing reciprocal entry: ${mentionedFeeEarner.name} should have entry for ${entryDate}`
+              );
+              missingEntries.push({
+                originalEntry: entry,
+                missingFeeEarner: mentionedFeeEarner,
+                date: entryDate,
+                narrative: narrative,
+              });
+            } else {
+              console.log(`    Found reciprocal entry for ${mentionedFeeEarner.name}`);
+            }
+          }
+        }
+      }
+
+      console.log(
+        `Processing complete: ${processedCount} entries processed, ${meetingEntriesFound} meeting entries found, ${missingEntries.length} missing reciprocal entries identified`
+      );
+
+      // Show detailed processing results in the UI
+      showMessage(
+        `DEBUG: Processed ${processedCount} entries, found ${meetingEntriesFound} meeting entries, identified ${missingEntries.length} missing reciprocal entries`,
+        "info"
+      );
+
+      // Add notes to rows about missing entries and apply formatting
+      // Get the header row to find Notes column
+      const headerRow = headers;
+      let notesColumnIndex = findNotesColumn(headerRow);
+
+      if (notesColumnIndex === -1) {
+        console.log("Notes column not found, creating new one...");
+        notesColumnIndex = await createNotesColumnWithFormatting(worksheet, usedRange);
+        // Reload used range after adding column
+        usedRange.load(["values", "rowCount", "columnCount"]);
+        await context.sync();
+        console.log(`Created Notes column at index ${notesColumnIndex}`);
+      } else {
+        console.log(`Found existing Notes column at index ${notesColumnIndex}`);
+      }
+
+      let updatedCount = 0;
+      for (const missing of missingEntries) {
+        const rowIndex = missing.originalEntry.rowIndex;
+        const noteText = `Missing Time: ${missing.missingFeeEarner.name} should have entry for ${missing.date}`;
+
+        // Get current Notes cell value and update it
+        const notesCell = worksheet.getCell(rowIndex, notesColumnIndex);
+        notesCell.load("values");
+        await context.sync();
+
+        const existingNotes = notesCell.values[0][0]?.toString() || "";
+        const updatedNotes = addNoteToRow(existingNotes, noteText);
+
+        console.log(
+          `Row ${rowIndex}: Existing notes: "${existingNotes}", Adding: "${noteText}", Result: "${updatedNotes}"`
+        );
+
+        if (updatedNotes !== existingNotes) {
+          // Update the Notes cell
+          notesCell.values = [[updatedNotes]];
+
+          console.log(
+            `Updated Notes cell at row ${rowIndex}, column ${notesColumnIndex} with: "${updatedNotes}"`
+          );
+
+          // Apply pale blue formatting to the entire row to highlight missing time
+          const rowRange = worksheet.getCell(rowIndex, 0).getEntireRow();
+          rowRange.format.fill.color = "#E3F2FD"; // Pale blue background
+
+          await context.sync();
+          updatedCount++;
+
+          console.log(`Applied pale blue formatting to row ${rowIndex}`);
+        } else {
+          console.log(`No change needed for row ${rowIndex} - note already exists`);
+        }
+
+        // Create placeholder entry if enabled
+        if (missingTimeRule.createMissingEntries) {
+          await createPlaceholderEntry(worksheet, missing, rowIndex, headers, currentProfile);
+          await context.sync();
+        }
+      }
+
+      return { success: true, updatedRows: updatedCount };
+    });
+  } catch (error) {
+    console.error("Error applying missing time entries rule:", error);
+    return { success: false, updatedRows: 0, error: error.message };
+  }
+}
+
+// Helper function to create placeholder entry for missing time
+async function createPlaceholderEntry(
+  worksheet: Excel.Worksheet,
+  missing: any,
+  parentRowIndex: number,
+  headers: string[],
+  currentProfile: any
+) {
+  // Insert a new row right after the parent entry
+  const insertRowIndex = parentRowIndex + 1;
+  const insertRange = worksheet.getCell(insertRowIndex, 0).getEntireRow();
+  insertRange.insert(Excel.InsertShiftDirection.down);
+
+  // Get original entry data
+  const originalEntry = missing.originalEntry;
+  const originalFeeEarner =
+    originalEntry[
+      headers
+        .find(
+          (h) =>
+            (h.toLowerCase().includes("fee") && h.toLowerCase().includes("earner")) ||
+            h.toLowerCase().includes("name")
+        )
+        ?.toLowerCase()
+        .replace(/\s+/g, "_")
+    ] || "";
+
+  const originalNarrative =
+    originalEntry[
+      headers
+        .find(
+          (h) => h.toLowerCase().includes("narrative") || h.toLowerCase().includes("description")
+        )
+        ?.toLowerCase()
+        .replace(/\s+/g, "_")
+    ] || "";
+
+  // Create new row data with swapped names
+  for (let colIndex = 0; colIndex < headers.length; colIndex++) {
+    const header = headers[colIndex];
+    const headerKey = header.toLowerCase().replace(/\s+/g, "_");
+    let cellValue = originalEntry[headerKey];
+
+    // Handle fee earner column - swap to missing person
+    if (
+      (header.toLowerCase().includes("fee") && header.toLowerCase().includes("earner")) ||
+      header.toLowerCase().includes("name")
+    ) {
+      cellValue = missing.missingFeeEarner.name;
+    }
+    // Handle narrative column - swap names in narrative
+    else if (
+      header.toLowerCase().includes("narrative") ||
+      header.toLowerCase().includes("description")
+    ) {
+      if (cellValue) {
+        // Replace original fee earner name with missing fee earner name in narrative
+        let swappedNarrative = cellValue.toString();
+
+        // Try to replace first name
+        const originalFirstName = originalFeeEarner.split(" ")[0];
+        const missingFirstName = missing.missingFeeEarner.name.split(" ")[0];
+        swappedNarrative = swappedNarrative.replace(
+          new RegExp(originalFirstName, "gi"),
+          missingFirstName
+        );
+
+        // Also try full name replacement
+        swappedNarrative = swappedNarrative.replace(
+          new RegExp(originalFeeEarner, "gi"),
+          missing.missingFeeEarner.name
+        );
+
+        cellValue = swappedNarrative;
+      }
+    }
+
+    // Set the cell value
+    if (cellValue !== undefined && cellValue !== null) {
+      const newCell = worksheet.getCell(insertRowIndex, colIndex);
+      newCell.values = [[cellValue]];
+    }
+  }
+
+  // Apply consistent formatting to match parent row
+  const parentRow = worksheet.getCell(parentRowIndex, 0).getEntireRow();
+  const newRow = worksheet.getCell(insertRowIndex, 0).getEntireRow();
+
+  // Copy formatting from parent (this is basic - could be enhanced)
+  if (currentProfile.enableAlternatingRows !== false) {
+    const altRowColor1 = currentProfile.altRowColor1 || "#FFFFFF";
+    const altRowColor2 = currentProfile.altRowColor2 || "#F8F9FA";
+    // Use alternating color logic
+    const useAltColor = insertRowIndex % 2 === 0;
+    newRow.format.fill.color = useAltColor ? altRowColor2 : altRowColor1;
+  }
+}
+
+// Helper function to check if dates are within tolerance
+function datesWithinTolerance(date1: any, date2: any, toleranceDays: number): boolean {
+  try {
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+
+    if (isNaN(d1.getTime()) || isNaN(d2.getTime())) {
+      return false; // Invalid dates
+    }
+
+    const diffMs = Math.abs(d1.getTime() - d2.getTime());
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+    return diffDays <= toleranceDays;
+  } catch {
+    return false;
   }
 }
 
@@ -2906,6 +3515,13 @@ function getDefaultRules(): RulesConfig {
       useNicknameDatabase: true,
       customNicknames: {},
     },
+    missingTimeEntries: {
+      enabled: false,
+      dateTolerance: 0, // exact date match
+      meetingKeywords: ["meeting", "call", "conference", "discussion", "telephone", "phone"],
+      requireExactTimeMatch: false,
+      createMissingEntries: false,
+    },
   };
 }
 
@@ -2936,6 +3552,26 @@ function getCurrentRules(): RulesConfig {
       useNicknameDatabase: (document.getElementById("use-nickname-database") as HTMLInputElement)
         .checked,
       customNicknames: getCurrentNicknames(),
+    },
+    missingTimeEntries: {
+      enabled:
+        (document.getElementById("missing-time-entries-enabled") as HTMLInputElement)?.checked ||
+        false,
+      dateTolerance: parseInt(
+        (document.getElementById("date-tolerance") as HTMLInputElement)?.value || "0",
+        10
+      ),
+      meetingKeywords: (
+        (document.getElementById("meeting-keywords") as HTMLInputElement)?.value ||
+        "meeting,call,conference,discussion,telephone,phone"
+      )
+        .split(",")
+        .map((keyword) => keyword.trim())
+        .filter((keyword) => keyword.length > 0),
+      requireExactTimeMatch:
+        (document.getElementById("exact-time-match") as HTMLInputElement)?.checked || false,
+      createMissingEntries:
+        (document.getElementById("create-missing-entries") as HTMLInputElement)?.checked || false,
     },
   };
 }
@@ -2970,9 +3606,47 @@ function loadRulesConfig(rules: RulesConfig) {
   // Show/hide nickname database config
   const nicknameConfigDiv = document.getElementById("nickname-database-config");
   nicknameConfigDiv.style.display = nameRule.useNicknameDatabase !== false ? "block" : "none";
+
+  // Load Missing Time Entries rule settings (with null checks for backward compatibility)
+  const missingTimeRule = rules.missingTimeEntries || getDefaultRules().missingTimeEntries;
+
+  const missingTimeEnabledEl = document.getElementById(
+    "missing-time-entries-enabled"
+  ) as HTMLInputElement;
+  if (missingTimeEnabledEl) {
+    missingTimeEnabledEl.checked = missingTimeRule.enabled;
+  }
+
+  const dateToleranceEl = document.getElementById("date-tolerance") as HTMLInputElement;
+  if (dateToleranceEl) {
+    dateToleranceEl.value = missingTimeRule.dateTolerance.toString();
+  }
+
+  const meetingKeywordsEl = document.getElementById("meeting-keywords") as HTMLInputElement;
+  if (meetingKeywordsEl) {
+    meetingKeywordsEl.value = missingTimeRule.meetingKeywords.join(", ");
+  }
+
+  const exactTimeMatchEl = document.getElementById("exact-time-match") as HTMLInputElement;
+  if (exactTimeMatchEl) {
+    exactTimeMatchEl.checked = missingTimeRule.requireExactTimeMatch;
+  }
+
+  const createMissingEntriesEl = document.getElementById(
+    "create-missing-entries"
+  ) as HTMLInputElement;
+  if (createMissingEntriesEl) {
+    createMissingEntriesEl.checked = missingTimeRule.createMissingEntries;
+  }
+
+  // Show/hide missing time entries configuration based on enabled state
+  const missingTimeConfigDiv = document.getElementById("missing-time-entries-content");
+  if (missingTimeConfigDiv) {
+    missingTimeConfigDiv.style.display = missingTimeRule.enabled ? "block" : "none";
+  }
 }
 
-function saveRules() {
+function saveRuleSettings() {
   const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
 
   if (!selectedMatter) {
@@ -2992,9 +3666,20 @@ function saveRules() {
     profiles[existingIndex].rules = currentRules;
     saveMatterProfiles(profiles);
 
-    const ruleCount = Object.values(currentRules).filter((rule) => rule.enabled).length;
+    // Generate detailed feedback about what was saved
+    const enabledRules = [];
+    if (currentRules.nameStandardisation?.enabled) {
+      enabledRules.push("Name Standardisation");
+    }
+    if (currentRules.missingTimeEntries?.enabled) {
+      enabledRules.push("Missing Time Entries");
+    }
+
+    const ruleCount = enabledRules.length;
+    const rulesList = enabledRules.length > 0 ? ` (${enabledRules.join(", ")})` : "";
+
     showMessage(
-      `Successfully saved rules configuration (${ruleCount} rule${ruleCount !== 1 ? "s" : ""} enabled) to matter profile "${selectedMatter}".`,
+      `Successfully saved rule settings${rulesList} to matter profile "${selectedMatter}". ${ruleCount} rule${ruleCount !== 1 ? "s" : ""} enabled.`,
       "success"
     );
   } else {

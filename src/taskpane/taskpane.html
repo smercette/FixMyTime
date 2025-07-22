@@ -709,23 +709,122 @@
                           </div>
                         </div>
 
-                        <hr style="margin: 25px 0" />
+                      </div>
+                    </div>
+                  </div>
 
-                        <div style="text-align: center">
-                          <div
-                            role="button"
-                            id="save-rules"
-                            class="ms-Button ms-Button--primary"
-                            style="font-size: 16px; font-weight: 600"
-                          >
-                            <span class="ms-Button-label">Save Rules</span>
+                  <!-- Missing Time Entries Rule Section -->
+                  <div class="dropdown-section">
+                    <div class="dropdown-header" data-target="missing-time-entries-content">
+                      <div style="display: flex; align-items: center; gap: 8px">
+                        <input
+                          type="checkbox"
+                          id="missing-time-entries-enabled"
+                          class="ms-Checkbox-input"
+                        />
+                        <h3 class="ms-font-l" style="margin: 0">Missing Time Entries</h3>
+                      </div>
+                      <span class="dropdown-arrow">▼</span>
+                    </div>
+                    <div
+                      id="missing-time-entries-content"
+                      class="dropdown-content"
+                      style="display: none"
+                    >
+                      <p class="ms-font-m">
+                        Identify when one fee earner records a meeting/call with another, but the other
+                        fee earner has no corresponding entry on the same date.
+                      </p>
+
+                      <div
+                        style="
+                          margin-top: 15px;
+                          padding: 15px;
+                          background-color: #f9f9f9;
+                          border-radius: 4px;
+                        "
+                      >
+                        <div class="ms-Grid">
+                          <div class="ms-Grid-row">
+                            <div class="ms-Grid-col ms-sm6">
+                              <label class="ms-Label ms-font-s">Date tolerance (days):</label>
+                              <input
+                                id="date-tolerance"
+                                type="number"
+                                class="ms-TextField-field"
+                                value="0"
+                                min="0"
+                                max="7"
+                                style="width: 80px; margin-top: 5px"
+                              />
+                              <p class="ms-font-xs" style="color: #666; margin-top: 5px">
+                                0 = exact date match, 1-7 = allow ± days difference
+                              </p>
+                            </div>
+                            <div class="ms-Grid-col ms-sm6">
+                              <input
+                                type="checkbox"
+                                id="exact-time-match"
+                                class="ms-Checkbox-input"
+                              />
+                              <label for="exact-time-match" class="ms-Label ms-font-s"
+                                >Require similar time periods</label
+                              >
+                              <p class="ms-font-xs" style="color: #666; margin-top: 5px; margin-left: 20px">
+                                Match entries with similar time ranges (±30 minutes)
+                              </p>
+                            </div>
                           </div>
-                          <p class="ms-font-xs" style="margin-top: 8px; color: #666">
-                            Saves rule configuration to the current matter profile.
+                        </div>
+
+                        <div style="margin-top: 15px">
+                          <label class="ms-Label ms-font-s"
+                            >Meeting keywords (comma separated):</label
+                          >
+                          <input
+                            id="meeting-keywords"
+                            type="text"
+                            class="ms-TextField-field"
+                            placeholder="meeting, call, conference, discussion, telephone, phone"
+                            value="meeting, call, conference, discussion, telephone, phone"
+                            style="width: 100%; margin-top: 5px"
+                          />
+                          <p class="ms-font-xs" style="color: #666; margin-top: 5px">
+                            Words in narratives that indicate meetings or calls requiring reciprocal entries
+                          </p>
+                        </div>
+
+                        <div style="margin-top: 15px">
+                          <input
+                            type="checkbox"
+                            id="create-missing-entries"
+                            class="ms-Checkbox-input"
+                          />
+                          <label for="create-missing-entries" class="ms-Label ms-font-s"
+                            >Auto-create missing entries (placeholder rows)</label
+                          >
+                          <p class="ms-font-xs" style="color: #666; margin-top: 5px; margin-left: 20px">
+                            Automatically add placeholder time entries for missing reciprocal entries
                           </p>
                         </div>
                       </div>
                     </div>
+                  </div>
+
+                  <!-- Save Rule Settings Button -->
+                  <hr style="margin: 30px 0" />
+                  <div style="text-align: center">
+                    <div
+                      role="button"
+                      id="save-rule-settings"
+                      class="ms-Button ms-Button--primary"
+                      style="font-size: 16px; font-weight: 600; width: 80%"
+                    >
+                      <span class="ms-Button-label">Save Rule Settings</span>
+                    </div>
+                    <p class="ms-font-xs" style="margin-top: 8px; color: #666">
+                      Saves all rule configurations to the current matter profile.
+                    </p>
                   </div>
                 </div>
               </div>
