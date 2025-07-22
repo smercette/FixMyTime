@@ -3413,25 +3413,31 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
           notesHeaderCell.format.borders.getItem(item as any).color = borderColor;
         });
         
-        // Format data cells in the new Notes column
+        // Format the entire Notes column to match existing columns
         if (newUsedRange.rowCount > 1) {
+          // Apply borders to the entire Notes column (header + data)
+          const notesColumnRange = worksheet.getCell(0, notesColumnIndex).getEntireColumn().getUsedRange();
+          const borderItems = [
+            "EdgeTop",
+            "EdgeBottom", 
+            "EdgeLeft",
+            "EdgeRight",
+            "InsideHorizontal",
+            "InsideVertical",
+          ];
+          borderItems.forEach((item) => {
+            notesColumnRange.format.borders.getItem(item as any).style = "Continuous";
+            notesColumnRange.format.borders.getItem(item as any).color = borderColor;
+          });
+          
+          // Apply alternating row colors if enabled
           const altRowColor1 = currentProfile.altRowColor1 || "#FFFFFF";
           const altRowColor2 = currentProfile.altRowColor2 || "#F8F9FA";
           const enableAlternatingRows = currentProfile.enableAlternatingRows !== false;
           
-          // Apply formatting to each data cell individually
-          for (let row = 1; row < newUsedRange.rowCount; row++) {
-            const cell = worksheet.getCell(row, notesColumnIndex);
-            
-            // Apply borders to each cell
-            const dataBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
-            dataBorderItems.forEach((item) => {
-              cell.format.borders.getItem(item as any).style = "Continuous";
-              cell.format.borders.getItem(item as any).color = borderColor;
-            });
-            
-            // Apply alternating row colors if enabled
-            if (enableAlternatingRows) {
+          if (enableAlternatingRows) {
+            for (let row = 1; row < newUsedRange.rowCount; row++) {
+              const cell = worksheet.getCell(row, notesColumnIndex);
               if ((row + 1) % 2 === 0) {
                 cell.format.fill.color = altRowColor2;
               } else {
