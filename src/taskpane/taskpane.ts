@@ -649,6 +649,14 @@ async function createNotesColumnWithFormatting(
   worksheet: Excel.Worksheet,
   usedRange: Excel.Range
 ): Promise<number> {
+  // Double-check that Notes column doesn't already exist
+  const existingHeaders = usedRange.values[0] as string[];
+  const existingNotesIndex = findNotesColumn(existingHeaders);
+  if (existingNotesIndex !== -1) {
+    console.log("WARNING: Notes column already exists, returning existing index");
+    return existingNotesIndex;
+  }
+  
   const insertAfterColumn = usedRange.columnCount - 1;
 
   // Insert new column at the far right
@@ -1000,10 +1008,33 @@ export async function addColumns() {
       const narrativeColumnIndex = findNarrativeColumn(headerRow);
       const timeColumnIndex = findTimeColumn(headerRow);
 
+      // Check for existing columns before processing
+      const existingAmendedNarrativeIndex = headerRow.findIndex(
+        (h) => h && h.toString().toLowerCase().includes("amended") && 
+               h.toString().toLowerCase().includes("narrative")
+      );
+      const existingOriginalNarrativeIndex = headerRow.findIndex(
+        (h) => h && h.toString().toLowerCase().includes("original") && 
+               h.toString().toLowerCase().includes("narrative")
+      );
+      const existingAmendedTimeIndex = headerRow.findIndex(
+        (h) => h && h.toString().toLowerCase().includes("amended") && 
+               h.toString().toLowerCase().includes("time")
+      );
+      const existingOriginalTimeIndex = headerRow.findIndex(
+        (h) => h && h.toString().toLowerCase().includes("original") && 
+               h.toString().toLowerCase().includes("time")
+      );
+      const existingChargeIndex = headerRow.findIndex(
+        (h) => h && h.toString().toLowerCase().includes("charge")
+      );
+      const existingNotesIndex = findNotesColumn(headerRow);
+
       // PHASE 1: Process amended columns (right to left)
       const columnsToProcess = [];
 
-      if (shouldAddAmendedNarrative && narrativeColumnIndex !== -1) {
+      if (shouldAddAmendedNarrative && narrativeColumnIndex !== -1 && 
+          existingAmendedNarrativeIndex === -1) {
         columnsToProcess.push({
           index: narrativeColumnIndex,
           originalName: "Original Narrative",
@@ -1012,7 +1043,8 @@ export async function addColumns() {
         });
       }
 
-      if (shouldAddAmendedTime && timeColumnIndex !== -1) {
+      if (shouldAddAmendedTime && timeColumnIndex !== -1 && 
+          existingAmendedTimeIndex === -1) {
         columnsToProcess.push({
           index: timeColumnIndex,
           originalName: "Original Time",
@@ -1038,7 +1070,7 @@ export async function addColumns() {
       }
 
       // PHASE 2: Add charge column at the far right (if requested)
-      if (shouldAddCharge) {
+      if (shouldAddCharge && existingChargeIndex === -1) {
         // After amended columns are added, refresh the used range to get the updated column count
         usedRange = worksheet.getUsedRange();
         usedRange.load(["rowCount", "columnCount", "values"]);
@@ -1056,17 +1088,34 @@ export async function addColumns() {
         usedRange.load(["rowCount", "columnCount", "values"]);
         await context.sync();
 
-        // Check if Notes column already exists
+        // Check if Notes column already exists (after other columns may have been added)
         const updatedHeaderRow = usedRange.values[0];
-        const existingNotesIndex = findNotesColumn(updatedHeaderRow);
+        const currentNotesIndex = findNotesColumn(updatedHeaderRow);
 
-        if (existingNotesIndex === -1) {
+        if (currentNotesIndex === -1) {
           // Create Notes column at the far right with full formatting
           await createNotesColumnWithFormatting(worksheet, usedRange);
           processedColumns.push("Notes");
+          console.log("Created Notes column");
         } else {
-          showMessage("Notes column already exists in the worksheet.", "info");
+          console.log(`Notes column already exists at index ${currentNotesIndex}`);
         }
+      }
+
+      // Track skipped columns
+      const skippedColumns = [];
+      if (shouldAddAmendedNarrative && existingAmendedNarrativeIndex !== -1) {
+        skippedColumns.push("Amended Narrative");
+      }
+      if (shouldAddAmendedTime && existingAmendedTimeIndex !== -1) {
+        skippedColumns.push("Amended Time");
+      }
+      if (shouldAddCharge && existingChargeIndex !== -1) {
+        skippedColumns.push("Charge");
+      }
+      // For Notes column, we need to check if it already existed BEFORE we tried to create it
+      if (shouldAddNotesForRules && existingNotesIndex !== -1 && !processedColumns.includes("Notes")) {
+        skippedColumns.push("Notes");
       }
 
       // Final auto-fit pass to ensure all columns are properly sized
@@ -1085,6 +1134,9 @@ export async function addColumns() {
       if (processedColumns.length > 0) {
         const message = `Successfully added ${processedColumns.join(", ")} column${processedColumns.length > 1 ? "s" : ""}.`;
         showMessage(message, "success");
+      } else if (skippedColumns.length > 0) {
+        const message = `All requested columns already exist: ${skippedColumns.join(", ")}.`;
+        showMessage(message, "info");
       } else {
         showMessage(
           "No columns were configured to be added. Please check your settings.",
@@ -3202,10 +3254,15 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
       if (notesColumnIndex === -1) {
         console.log("Notes column not found, creating new one...");
         notesColumnIndex = await createNotesColumnWithFormatting(worksheet, usedRange);
-        // Reload used range after adding column
+        // Reload used range AND headers after adding column
+        usedRange = worksheet.getUsedRange();
         usedRange.load(["values", "rowCount", "columnCount"]);
         await context.sync();
+        
+        // Re-read headers after column insertion
+        headers = usedRange.values[0] as string[];
         console.log(`Created Notes column at index ${notesColumnIndex}`);
+        console.log(`Updated headers: ${headers.join(", ")}`);
       } else {
         console.log(`Found existing Notes column at index ${notesColumnIndex}`);
       }
@@ -3224,12 +3281,13 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
         const updatedNotes = addNoteToRow(existingNotes, noteText);
 
         console.log(
-          `Row ${rowIndex}: Existing notes: "${existingNotes}", Adding: "${noteText}", Result: "${updatedNotes}"`
+          `Row ${rowIndex + 1} (Excel row): Column ${notesColumnIndex}, Existing notes: "${existingNotes}", Adding: "${noteText}", Result: "${updatedNotes}"`
         );
 
         if (updatedNotes !== existingNotes) {
           // Update the Notes cell
           notesCell.values = [[updatedNotes]];
+          console.log(`Setting notes cell at row ${rowIndex}, col ${notesColumnIndex} to: "${updatedNotes}"`);
 
           console.log(
             `Updated Notes cell at row ${rowIndex}, column ${notesColumnIndex} with: "${updatedNotes}"`
