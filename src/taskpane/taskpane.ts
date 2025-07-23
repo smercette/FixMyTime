@@ -3544,7 +3544,7 @@ async function createPlaceholderEntry(
 
   // Get original entry data
   const originalEntry = missing.originalEntry;
-  const originalFeeEarner =
+  const originalFeeEarnerFromEntry =
     originalEntry[
       headers
         .find(
@@ -3555,6 +3555,24 @@ async function createPlaceholderEntry(
         ?.toLowerCase()
         .replace(/\s+/g, "_")
     ] || "";
+
+  // Get fee earners configuration for this matter
+  const feeEarners = currentProfile.feeEarners || [];
+  
+  // Find the full name of the original fee earner from the fee earners list
+  let originalFeeEarnerFullName = originalFeeEarnerFromEntry;
+  const originalFirstName = originalFeeEarnerFromEntry.split(" ")[0].toLowerCase();
+  
+  // Look for a match in the fee earners list to get the proper full name
+  const matchingFeeEarner = feeEarners.find((fe: FeeEarner) => {
+    const feFirstName = fe.name.split(" ")[0].toLowerCase();
+    const feFullNameLower = fe.name.toLowerCase();
+    return feFirstName === originalFirstName || feFullNameLower === originalFeeEarnerFromEntry.toLowerCase();
+  });
+  
+  if (matchingFeeEarner) {
+    originalFeeEarnerFullName = matchingFeeEarner.name;
+  }
 
   const originalNarrative =
     originalEntry[
@@ -3585,22 +3603,22 @@ async function createPlaceholderEntry(
       header.toLowerCase().includes("description")
     ) {
       if (cellValue) {
-        // Replace missing fee earner name with original fee earner name in narrative
-        // (so the new entry for B mentions A instead of B)
+        // Replace missing fee earner name with original fee earner's FULL name in narrative
+        // (so the new entry for B mentions A's full name instead of B)
         let swappedNarrative = cellValue.toString();
 
-        // Try to replace missing fee earner's first name with original fee earner's first name
-        const originalFirstName = originalFeeEarner.split(" ")[0];
-        const missingFirstName = missing.missingFeeEarner.name.split(" ")[0];
-        swappedNarrative = swappedNarrative.replace(
-          new RegExp(missingFirstName, "gi"),
-          originalFirstName
-        );
-
-        // Also try full name replacement (missing -> original)
+        // First try to replace the full name if present
         swappedNarrative = swappedNarrative.replace(
           new RegExp(missing.missingFeeEarner.name, "gi"),
-          originalFeeEarner
+          originalFeeEarnerFullName
+        );
+
+        // Then try to replace just the first name with the full name
+        const missingFirstName = missing.missingFeeEarner.name.split(" ")[0];
+        // Use word boundaries to ensure we're replacing whole words
+        swappedNarrative = swappedNarrative.replace(
+          new RegExp(`\\b${missingFirstName}\\b`, "gi"),
+          originalFeeEarnerFullName
         );
 
         cellValue = swappedNarrative;
