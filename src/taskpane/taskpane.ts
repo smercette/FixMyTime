@@ -851,11 +851,12 @@ function prepopulateChargeValues(allValues: any[][], narrativeColumnIndex: numbe
   return values;
 }
 
-function showMessage(message: string, type: string) {
+function showMessage(message: string, type: string, timeout?: number) {
   const messageDiv = document.getElementById("message");
   const messageText = document.getElementById("message-text");
 
-  messageText.textContent = message;
+  // Use innerText to preserve line breaks
+  messageText.innerText = message;
   messageDiv.style.display = "block";
 
   // Style based on type
@@ -867,10 +868,10 @@ function showMessage(message: string, type: string) {
     messageDiv.className = "ms-MessageBar ms-MessageBar--success";
   }
 
-  // Hide message after 5 seconds
+  // Hide message after specified timeout or 5 seconds
   setTimeout(() => {
     messageDiv.style.display = "none";
-  }, 5000);
+  }, timeout || 5000);
 }
 
 function showDebugMessage(message: string) {
@@ -3011,13 +3012,10 @@ async function applyAllRules() {
     const nameStandardisationEnabled = currentProfile.rules.nameStandardisation?.enabled || false;
     const missingTimeEnabled = currentProfile.rules.missingTimeEntries?.enabled || false;
 
-    showMessage(
-      `DEBUG: Starting rules for ${selectedMatter}. TimeFormat: ${timeFormatEnabled ? "ENABLED" : "disabled"}, Name Standardisation: ${nameStandardisationEnabled ? "ENABLED" : "disabled"}, Missing Time: ${missingTimeEnabled ? "ENABLED" : "disabled"}`,
-      "info"
-    );
 
     let appliedRules = [];
     let totalUpdatedRows = 0;
+    let allDebugInfo: string[] = [];
 
     // Apply TimeFormat Rule if enabled (runs first)
     if (currentProfile.rules.timeFormat?.enabled) {
@@ -3025,8 +3023,11 @@ async function applyAllRules() {
 
       const result = await applyTimeFormatRuleWithResult();
       if (result.success) {
-        appliedRules.push("TimeFormat");
+        appliedRules.push(`TimeFormat (from ${result.sourceColumn})`);
         totalUpdatedRows += result.updatedRows;
+        if (result.debugInfo) {
+          allDebugInfo.push(result.debugInfo);
+        }
       } else if (result.error) {
         showMessage(`TimeFormat failed: ${result.error}`, "error");
         return;
@@ -3073,10 +3074,17 @@ async function applyAllRules() {
       await recalculateColumnWidths(currentProfile);
 
       const rulesText = appliedRules.join(", ");
-      showMessage(
-        `Successfully applied ${rulesText}. Updated ${totalUpdatedRows} rows total. (Format reapplication disabled for debugging). Undo is available.`,
-        "success"
-      );
+      
+      // If we have debug info, show it
+      if (allDebugInfo.length > 0) {
+        const debugMessage = allDebugInfo.join('\n\n---\n\n');
+        showMessage(debugMessage, "info", 20000); // Show for 20 seconds
+      } else {
+        showMessage(
+          `Successfully applied ${rulesText}. Updated ${totalUpdatedRows} rows total. (Format reapplication disabled for debugging). Undo is available.`,
+          "success"
+        );
+      }
     } else {
       showMessage("No rules were enabled for this matter profile.", "info");
     }
@@ -3166,6 +3174,8 @@ async function applyTimeFormatRuleWithResult(): Promise<{
   success: boolean;
   updatedRows: number;
   error?: string;
+  sourceColumn?: string;
+  debugInfo?: string;
 }> {
   try {
     // Get current matter and its rules
@@ -3196,13 +3206,21 @@ async function applyTimeFormatRuleWithResult(): Promise<{
       const values = usedRange.values;
       const headers = values[0];
       
-      // Find required columns
-      const timeIndex = headers.findIndex((h) => h?.toString().toLowerCase() === "time");
+      // Find required columns - check both "Time" and "Original Time"
+      let timeIndex = headers.findIndex((h) => h?.toString().toLowerCase() === "time");
+      let sourceColumnName = "Time";
+      
+      // If "Time" column not found, look for "Original Time" (after formatting has been applied)
+      if (timeIndex === -1) {
+        timeIndex = headers.findIndex((h) => h?.toString().toLowerCase() === "original time");
+        sourceColumnName = "Original Time";
+      }
+      
       const amendedTimeIndex = headers.findIndex((h) => h?.toString().toLowerCase() === "amended time");
       let notesIndex = headers.findIndex((h) => h?.toString().toLowerCase() === "notes");
       
       if (timeIndex === -1) {
-        return { success: false, updatedRows: 0, error: "Time column not found" };
+        return { success: false, updatedRows: 0, error: "Neither 'Time' nor 'Original Time' column found" };
       }
       
       // Create Amended Time column if it doesn't exist
@@ -3210,13 +3228,11 @@ async function applyTimeFormatRuleWithResult(): Promise<{
         const newColumnIndex = headers.length;
         const insertRange = worksheet.getCell(0, newColumnIndex);
         insertRange.values = [["Amended Time"]];
+        amendedTimeIndex = newColumnIndex; // Update the index!
         
-        // Update the used range to include the new column
-        const newUsedRange = worksheet.getUsedRange();
-        newUsedRange.load("values");
-        await context.sync();
-        values.push(...newUsedRange.values);
+        // Update headers array
         headers.push("Amended Time");
+        await context.sync();
       }
       
       // Create Notes column if it doesn't exist
@@ -3231,22 +3247,44 @@ async function applyTimeFormatRuleWithResult(): Promise<{
       }
       
       let updatedRows = 0;
-      const amendedTimeColumnIndex = amendedTimeIndex !== -1 ? amendedTimeIndex : headers.length - 2;
+      let debugMessages: string[] = [];
+      
+      // DEBUG: Log column information
+      debugMessages.push(`Source: ${sourceColumnName} (index ${timeIndex})`);
+      debugMessages.push(`Amended Time at index ${amendedTimeIndex}`);
+      debugMessages.push(`Output: ${timeFormatRule.outputFormat}, 6min rounding: ${timeFormatRule.roundToSixMinutes ? 'ON' : 'OFF'}`);
+      debugMessages.push('---');
+      
+      // If output format is HH:MM, format the entire Amended Time column as text first
+      if (timeFormatRule.outputFormat === "HH:MM") {
+        const amendedTimeColumn = worksheet.getCell(0, amendedTimeIndex).getEntireColumn();
+        amendedTimeColumn.numberFormat = "@"; // Text format
+        await context.sync();
+      }
       
       // Process each data row
       for (let rowIndex = 1; rowIndex < values.length; rowIndex++) {
         const timeValue = values[rowIndex][timeIndex];
         if (!timeValue) continue;
         
+        const timeString = timeValue.toString();
+        
         const convertedTime = convertTimeFormat(
-          timeValue.toString(),
+          timeString,
           timeFormatRule.outputFormat,
-          timeFormatRule.roundToSixMinutes
+          timeFormatRule.roundToSixMinutes,
+          rowIndex <= 5 ? debugMessages : null // Pass debug array only for first 5 rows
         );
         
-        if (convertedTime && convertedTime !== timeValue.toString()) {
+        // DEBUG: Log first 5 conversions
+        if (rowIndex <= 5 && convertedTime !== null) {
+          debugMessages.push(`Row ${rowIndex}: "${timeString}" → "${convertedTime}"`);
+        }
+        
+        // Always update Amended Time if we have a valid converted time
+        if (convertedTime !== null) {
           // Update Amended Time column
-          const amendedTimeCell = worksheet.getCell(rowIndex, amendedTimeColumnIndex);
+          const amendedTimeCell = worksheet.getCell(rowIndex, amendedTimeIndex);
           amendedTimeCell.values = [[convertedTime]];
           
           // Update Notes column
@@ -3262,7 +3300,11 @@ async function applyTimeFormatRuleWithResult(): Promise<{
       }
       
       await context.sync();
-      return { success: true, updatedRows: updatedRows };
+      
+      // Return debug info instead of showing it
+      const debugText = `TimeFormat Debug:\n${debugMessages.join('\n')}`;
+      
+      return { success: true, updatedRows: updatedRows, sourceColumn: sourceColumnName, debugInfo: debugText };
     });
   } catch (error) {
     return { success: false, updatedRows: 0, error: error.message };
@@ -4337,7 +4379,7 @@ async function applyNameStandardisationToWorksheetWithUndo(): Promise<number> {
 
 // Rules Management Functions
 // Time format conversion utilities
-function parseTimeToMinutes(timeStr: string): number | null {
+function parseTimeToMinutes(timeStr: string, debugMessages?: string[]): number | null {
   if (!timeStr || typeof timeStr !== 'string') return null;
   
   const trimmed = timeStr.trim();
@@ -4348,20 +4390,55 @@ function parseTimeToMinutes(timeStr: string): number | null {
     const hours = parseInt(hhmmMatch[1], 10);
     const minutes = parseInt(hhmmMatch[2], 10);
     if (hours >= 0 && minutes >= 0 && minutes < 60) {
-      return hours * 60 + minutes;
+      const totalMinutes = hours * 60 + minutes;
+      if (debugMessages) {
+        debugMessages.push(`Parse: "${trimmed}" = ${hours}h ${minutes}m = ${totalMinutes} min`);
+      }
+      return totalMinutes;
     }
   }
   
   // Check for decimal format (e.g., "1.5", "2.25", "0.1")
-  const decimalMatch = trimmed.match(/^(\d+)\.(\d{1,2})$/);
+  const decimalMatch = trimmed.match(/^(\d+)\.(\d+)$/);
   if (decimalMatch) {
-    const hours = parseInt(decimalMatch[1], 10);
-    const decimalPart = decimalMatch[2].padEnd(2, '0'); // pad to 2 digits
-    const decimalValue = parseInt(decimalPart, 10) / 100;
-    const totalHours = hours + decimalValue;
-    return Math.round(totalHours * 60);
+    const wholePart = parseInt(decimalMatch[1], 10);
+    const decimalPart = decimalMatch[2];
+    
+    // Handle different decimal interpretations
+    let fractionalHours: number;
+    if (decimalPart.length === 1) {
+      // Single digit after decimal (e.g., 0.1, 0.2, 0.5)
+      // Interpret as tenths of an hour
+      fractionalHours = parseInt(decimalPart, 10) / 10;
+    } else {
+      // Multiple digits after decimal (e.g., 0.25, 0.75)
+      // Interpret as hundredths of an hour
+      fractionalHours = parseInt(decimalPart, 10) / Math.pow(10, decimalPart.length);
+    }
+    
+    const totalHours = wholePart + fractionalHours;
+    const totalMinutes = Math.round(totalHours * 60);
+    
+    if (debugMessages) {
+      debugMessages.push(`Parse: "${trimmed}" = ${totalHours.toFixed(2)}h = ${totalMinutes} min`);
+    }
+    return totalMinutes;
   }
   
+  // Check if it's a whole number (assume hours, not minutes)
+  const numberMatch = trimmed.match(/^(\d+)$/);
+  if (numberMatch) {
+    const hours = parseInt(numberMatch[1], 10);
+    const totalMinutes = hours * 60;
+    if (debugMessages) {
+      debugMessages.push(`Parse: "${trimmed}" = ${hours}h = ${totalMinutes} min`);
+    }
+    return totalMinutes;
+  }
+  
+  if (debugMessages) {
+    debugMessages.push(`Parse FAILED: "${trimmed}"`);
+  }
   return null;
 }
 
@@ -4382,11 +4459,15 @@ function formatMinutesToDecimal(minutes: number): string {
   return `${hours}.${decimal.toString().padStart(2, '0')}`;
 }
 
-function convertTimeFormat(timeStr: string, outputFormat: "HH:MM" | "XX.YY", roundToSix: boolean): string | null {
-  const minutes = parseTimeToMinutes(timeStr);
+function convertTimeFormat(timeStr: string, outputFormat: "HH:MM" | "XX.YY", roundToSix: boolean, debugMessages?: string[]): string | null {
+  const minutes = parseTimeToMinutes(timeStr, debugMessages);
   if (minutes === null) return null;
   
   const finalMinutes = roundToSix ? roundToSixMinutes(minutes) : minutes;
+  
+  if (debugMessages && roundToSix && minutes !== finalMinutes) {
+    debugMessages.push(`Rounded: ${minutes} min → ${finalMinutes} min`);
+  }
   
   if (outputFormat === "HH:MM") {
     return formatMinutesToHHMM(finalMinutes);

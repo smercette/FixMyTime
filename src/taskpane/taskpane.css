@@ -611,3 +611,17 @@ b {
 .nickname-entry.built-in .nickname-remove:hover {
     background-color: #5a6268;
 }
+
+/* Message Bar Styling for Debug */
+#message {
+    margin-top: 20px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+#message-text {
+    white-space: pre-line;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 11px;
+    line-height: 1.5;
+}
