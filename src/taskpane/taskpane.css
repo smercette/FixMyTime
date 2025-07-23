@@ -277,6 +277,7 @@ b {
     padding: 20px;
     border-top: 1px solid #e5e5e5;
     overflow: visible; /* Ensure content can scroll */
+    display: none; /* Hide by default */
 }
 
 /* Participants table styling */

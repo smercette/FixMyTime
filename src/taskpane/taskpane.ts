@@ -143,12 +143,19 @@ Office.onReady((info) => {
     // Dropdown functionality
     const dropdownHeaders = document.querySelectorAll(".dropdown-header");
     dropdownHeaders.forEach((header) => {
+      // Initialize all dropdowns as collapsed
+      header.classList.add("collapsed");
+      const arrow = header.querySelector(".dropdown-arrow");
+      if (arrow) {
+        arrow.textContent = "▶";
+      }
+      
       header.addEventListener("click", () => {
         const targetId = header.getAttribute("data-target");
         const content = document.getElementById(targetId);
         const arrow = header.querySelector(".dropdown-arrow");
 
-        if (content.style.display === "none") {
+        if (content.style.display === "none" || content.style.display === "") {
           content.style.display = "block";
           header.classList.remove("collapsed");
           arrow.textContent = "▼";
