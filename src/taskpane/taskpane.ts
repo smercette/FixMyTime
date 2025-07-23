@@ -160,6 +160,11 @@ Office.onReady((info) => {
           content.style.display = "block";
           header.classList.remove("collapsed");
           arrow.textContent = "▼";
+          
+          // If this is the main Rules dropdown, ensure nested rule dropdowns are collapsed
+          if (targetId === "rules-content") {
+            collapseNestedRuleDropdowns();
+          }
         } else {
           content.style.display = "none";
           header.classList.add("collapsed");
@@ -169,6 +174,27 @@ Office.onReady((info) => {
     });
   }
 });
+
+// Function to collapse nested rule dropdowns when main Rules dropdown is opened
+function collapseNestedRuleDropdowns() {
+  const nestedDropdowns = [
+    { contentId: "name-standardisation-content", headerSelector: '[data-target="name-standardisation-content"]' },
+    { contentId: "missing-time-entries-content", headerSelector: '[data-target="missing-time-entries-content"]' }
+  ];
+  
+  nestedDropdowns.forEach(dropdown => {
+    const content = document.getElementById(dropdown.contentId);
+    const header = document.querySelector(dropdown.headerSelector);
+    const arrow = header?.querySelector(".dropdown-arrow");
+    
+    if (content && header && arrow) {
+      // Collapse the dropdown
+      content.style.display = "none";
+      header.classList.add("collapsed");
+      arrow.textContent = "▶";
+    }
+  });
+}
 
 // Combined formatting function that applies all formatting operations
 async function applyFormatting() {
