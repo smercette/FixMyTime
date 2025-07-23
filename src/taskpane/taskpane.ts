@@ -3916,8 +3916,56 @@ async function applyNameStandardisationToWorksheetWithUndo(): Promise<number> {
 
       // Find Notes column (should exist if Name Standardisation is enabled)
       let notesCol = findNotesColumn(headers);
+      
+      // If Notes column doesn't exist, create it
+      if (notesCol === -1 && updatedCount > 0) {
+        console.log("Notes column not found, creating it for Name Standardisation notes...");
+        
+        // Create Notes column at the end
+        const newColumnIndex = headers.length;
+        const insertColumn = worksheet.getCell(0, newColumnIndex).getEntireColumn();
+        insertColumn.insert(Excel.InsertShiftDirection.right);
+        
+        // Set header
+        const headerCell = worksheet.getCell(0, newColumnIndex);
+        headerCell.values = [["Notes"]];
+        
+        // Apply formatting from the profile
+        const borderColor = currentProfile.borderColor || "#D1D5DB";
+        const borderStyle: Excel.BorderLineStyle = "Continuous";
+        const borderWeight: Excel.BorderWeight = "Thin";
+        
+        headerCell.format.borders.getItem("EdgeBottom").style = borderStyle;
+        headerCell.format.borders.getItem("EdgeBottom").color = borderColor;
+        headerCell.format.borders.getItem("EdgeBottom").weight = borderWeight;
+        headerCell.format.borders.getItem("EdgeTop").style = borderStyle;
+        headerCell.format.borders.getItem("EdgeTop").color = borderColor;
+        headerCell.format.borders.getItem("EdgeTop").weight = borderWeight;
+        headerCell.format.borders.getItem("EdgeLeft").style = borderStyle;
+        headerCell.format.borders.getItem("EdgeLeft").color = borderColor;
+        headerCell.format.borders.getItem("EdgeLeft").weight = borderWeight;
+        headerCell.format.borders.getItem("EdgeRight").style = borderStyle;
+        headerCell.format.borders.getItem("EdgeRight").color = borderColor;
+        headerCell.format.borders.getItem("EdgeRight").weight = borderWeight;
+        
+        headerCell.format.fill.color = currentProfile.headerBgColor || "#1E3A8A";
+        headerCell.format.font.color = currentProfile.headerTextColor || "#FFFFFF";
+        headerCell.format.font.bold = true;
+        headerCell.format.horizontalAlignment = "Center";
+        headerCell.format.verticalAlignment = currentProfile.verticalAlignment || "Center";
+        
+        // Set the notes column index
+        notesCol = newColumnIndex;
+        headers.push("Notes");
+        
+        await context.sync();
+        console.log(`Created Notes column at index ${notesCol}`);
+      }
 
       // Now add notes for rows that were changed
+      console.log(`Adding notes for ${processedData.length} rows. amendedNarrativeCol: ${amendedNarrativeCol}, notesCol: ${notesCol}`);
+      let notesAddedCount = 0;
+      
       for (let i = 0; i < processedData.length; i++) {
         const processedRow = processedData[i];
         const amendedValue = processedRow["Amended Narrative"];
@@ -3948,10 +3996,14 @@ async function applyNameStandardisationToWorksheetWithUndo(): Promise<number> {
 
               // Update the Notes cell
               notesCell.values = [[updatedNotes]];
+              notesAddedCount++;
+              console.log(`Added note to row ${i + 1}: "${updatedNotes}"`);
             }
           }
         }
       }
+      
+      console.log(`Notes added to ${notesAddedCount} rows out of ${updatedCount} updated rows`);
 
       await context.sync();
 
