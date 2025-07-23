@@ -114,3 +114,8 @@ No test framework is currently configured. Consider adding Jest or Mocha for uni
 
 ### AI Interaction Principles
 - Don't be sycophantic - I don't need praise. Only agree with me if you think I'm right.
+
+## User Interface Guidelines
+
+### Dropdown Behavior
+- All dropdown menus should be minimised by default (ie, the user should have to expand them manually).

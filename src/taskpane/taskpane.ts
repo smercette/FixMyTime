@@ -54,6 +54,17 @@ Office.onReady((info) => {
       configDiv.style.display = nicknameToggle.checked ? "block" : "none";
     };
 
+    // TimeFormat rule toggle
+    const timeFormatToggle = document.getElementById("time-format-enabled") as HTMLInputElement;
+    if (timeFormatToggle) {
+      timeFormatToggle.onchange = () => {
+        const configDiv = document.getElementById("time-format-content");
+        if (configDiv) {
+          configDiv.style.display = timeFormatToggle.checked ? "block" : "none";
+        }
+      };
+    }
+
     // Name Standardisation rule toggle
     const nameStandardisationToggle = document.getElementById(
       "name-standardisation-enabled"
@@ -178,6 +189,7 @@ Office.onReady((info) => {
 // Function to collapse nested rule dropdowns when main Rules dropdown is opened
 function collapseNestedRuleDropdowns() {
   const nestedDropdowns = [
+    { contentId: "time-format-content", headerSelector: '[data-target="time-format-content"]' },
     { contentId: "name-standardisation-content", headerSelector: '[data-target="name-standardisation-content"]' },
     { contentId: "missing-time-entries-content", headerSelector: '[data-target="missing-time-entries-content"]' }
   ];
@@ -1280,7 +1292,14 @@ interface MissingTimeEntriesRule {
   createMissingEntries: boolean; // auto-create placeholder entries
 }
 
+interface TimeFormatRule {
+  enabled: boolean;
+  outputFormat: "HH:MM" | "XX.YY"; // HH:MM (hours:minutes) or XX.YY (decimal hours)
+  roundToSixMinutes: boolean; // round to nearest 6-minute increment
+}
+
 interface RulesConfig {
+  timeFormat: TimeFormatRule;
   nameStandardisation: NameStandardisationRule;
   missingTimeEntries: MissingTimeEntriesRule;
 }
@@ -2988,16 +3007,31 @@ async function applyAllRules() {
     }
 
     // DEBUG: Show what rules are enabled
+    const timeFormatEnabled = currentProfile.rules.timeFormat?.enabled || false;
     const nameStandardisationEnabled = currentProfile.rules.nameStandardisation?.enabled || false;
     const missingTimeEnabled = currentProfile.rules.missingTimeEntries?.enabled || false;
 
     showMessage(
-      `DEBUG: Starting rules for ${selectedMatter}. Name Standardisation: ${nameStandardisationEnabled ? "ENABLED" : "disabled"}, Missing Time: ${missingTimeEnabled ? "ENABLED" : "disabled"}`,
+      `DEBUG: Starting rules for ${selectedMatter}. TimeFormat: ${timeFormatEnabled ? "ENABLED" : "disabled"}, Name Standardisation: ${nameStandardisationEnabled ? "ENABLED" : "disabled"}, Missing Time: ${missingTimeEnabled ? "ENABLED" : "disabled"}`,
       "info"
     );
 
     let appliedRules = [];
     let totalUpdatedRows = 0;
+
+    // Apply TimeFormat Rule if enabled (runs first)
+    if (currentProfile.rules.timeFormat?.enabled) {
+      showMessage("Applying TimeFormat rule...", "info");
+
+      const result = await applyTimeFormatRuleWithResult();
+      if (result.success) {
+        appliedRules.push("TimeFormat");
+        totalUpdatedRows += result.updatedRows;
+      } else if (result.error) {
+        showMessage(`TimeFormat failed: ${result.error}`, "error");
+        return;
+      }
+    }
 
     // Apply Name Standardisation Rule if enabled
     if (currentProfile.rules.nameStandardisation?.enabled) {
@@ -3128,6 +3162,113 @@ async function recalculateColumnWidths(currentProfile: any) {
 }
 
 // Helper function to apply Name Standardisation and return result
+async function applyTimeFormatRuleWithResult(): Promise<{
+  success: boolean;
+  updatedRows: number;
+  error?: string;
+}> {
+  try {
+    // Get current matter and its rules
+    const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+    if (!selectedMatter) {
+      return { success: false, updatedRows: 0, error: "No matter selected" };
+    }
+
+    const profiles = getMatterProfiles();
+    const currentProfile = profiles.find((p) => p.name === selectedMatter);
+    if (!currentProfile || !currentProfile.rules || !currentProfile.rules.timeFormat) {
+      return { success: false, updatedRows: 0, error: "TimeFormat rule not configured" };
+    }
+
+    const timeFormatRule = currentProfile.rules.timeFormat;
+    
+    return await Excel.run(async (context) => {
+      const worksheet = context.workbook.worksheets.getActiveWorksheet();
+      const usedRange = worksheet.getUsedRange();
+      usedRange.load("values");
+      
+      await context.sync();
+      
+      if (!usedRange.values || usedRange.values.length === 0) {
+        return { success: false, updatedRows: 0, error: "No data found in worksheet" };
+      }
+      
+      const values = usedRange.values;
+      const headers = values[0];
+      
+      // Find required columns
+      const timeIndex = headers.findIndex((h) => h?.toString().toLowerCase() === "time");
+      const amendedTimeIndex = headers.findIndex((h) => h?.toString().toLowerCase() === "amended time");
+      let notesIndex = headers.findIndex((h) => h?.toString().toLowerCase() === "notes");
+      
+      if (timeIndex === -1) {
+        return { success: false, updatedRows: 0, error: "Time column not found" };
+      }
+      
+      // Create Amended Time column if it doesn't exist
+      if (amendedTimeIndex === -1) {
+        const newColumnIndex = headers.length;
+        const insertRange = worksheet.getCell(0, newColumnIndex);
+        insertRange.values = [["Amended Time"]];
+        
+        // Update the used range to include the new column
+        const newUsedRange = worksheet.getUsedRange();
+        newUsedRange.load("values");
+        await context.sync();
+        values.push(...newUsedRange.values);
+        headers.push("Amended Time");
+      }
+      
+      // Create Notes column if it doesn't exist
+      if (notesIndex === -1) {
+        const newColumnIndex = headers.length;
+        const insertRange = worksheet.getCell(0, newColumnIndex);
+        insertRange.values = [["Notes"]];
+        notesIndex = newColumnIndex;
+        
+        // Update headers array
+        headers.push("Notes");
+      }
+      
+      let updatedRows = 0;
+      const amendedTimeColumnIndex = amendedTimeIndex !== -1 ? amendedTimeIndex : headers.length - 2;
+      
+      // Process each data row
+      for (let rowIndex = 1; rowIndex < values.length; rowIndex++) {
+        const timeValue = values[rowIndex][timeIndex];
+        if (!timeValue) continue;
+        
+        const convertedTime = convertTimeFormat(
+          timeValue.toString(),
+          timeFormatRule.outputFormat,
+          timeFormatRule.roundToSixMinutes
+        );
+        
+        if (convertedTime && convertedTime !== timeValue.toString()) {
+          // Update Amended Time column
+          const amendedTimeCell = worksheet.getCell(rowIndex, amendedTimeColumnIndex);
+          amendedTimeCell.values = [[convertedTime]];
+          
+          // Update Notes column
+          const currentNotes = values[rowIndex][notesIndex]?.toString() || "";
+          const newNote = "TimeFormat Applied";
+          const updatedNotes = currentNotes ? `${currentNotes}, ${newNote}` : newNote;
+          
+          const notesCell = worksheet.getCell(rowIndex, notesIndex);
+          notesCell.values = [[updatedNotes]];
+          
+          updatedRows++;
+        }
+      }
+      
+      await context.sync();
+      return { success: true, updatedRows: updatedRows };
+    });
+  } catch (error) {
+    return { success: false, updatedRows: 0, error: error.message };
+  }
+}
+
 async function applyNameStandardisationRuleWithResult(): Promise<{
   success: boolean;
   updatedRows: number;
@@ -4195,8 +4336,72 @@ async function applyNameStandardisationToWorksheetWithUndo(): Promise<number> {
 }
 
 // Rules Management Functions
+// Time format conversion utilities
+function parseTimeToMinutes(timeStr: string): number | null {
+  if (!timeStr || typeof timeStr !== 'string') return null;
+  
+  const trimmed = timeStr.trim();
+  
+  // Check for HH:MM format (e.g., "1:30", "01:30", "10:15")
+  const hhmmMatch = trimmed.match(/^(\d{1,2}):(\d{2})$/);
+  if (hhmmMatch) {
+    const hours = parseInt(hhmmMatch[1], 10);
+    const minutes = parseInt(hhmmMatch[2], 10);
+    if (hours >= 0 && minutes >= 0 && minutes < 60) {
+      return hours * 60 + minutes;
+    }
+  }
+  
+  // Check for decimal format (e.g., "1.5", "2.25", "0.1")
+  const decimalMatch = trimmed.match(/^(\d+)\.(\d{1,2})$/);
+  if (decimalMatch) {
+    const hours = parseInt(decimalMatch[1], 10);
+    const decimalPart = decimalMatch[2].padEnd(2, '0'); // pad to 2 digits
+    const decimalValue = parseInt(decimalPart, 10) / 100;
+    const totalHours = hours + decimalValue;
+    return Math.round(totalHours * 60);
+  }
+  
+  return null;
+}
+
+function roundToSixMinutes(minutes: number): number {
+  return Math.round(minutes / 6) * 6;
+}
+
+function formatMinutesToHHMM(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours}:${mins.toString().padStart(2, '0')}`;
+}
+
+function formatMinutesToDecimal(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  const decimal = Math.round((remainingMinutes / 60) * 100);
+  return `${hours}.${decimal.toString().padStart(2, '0')}`;
+}
+
+function convertTimeFormat(timeStr: string, outputFormat: "HH:MM" | "XX.YY", roundToSix: boolean): string | null {
+  const minutes = parseTimeToMinutes(timeStr);
+  if (minutes === null) return null;
+  
+  const finalMinutes = roundToSix ? roundToSixMinutes(minutes) : minutes;
+  
+  if (outputFormat === "HH:MM") {
+    return formatMinutesToHHMM(finalMinutes);
+  } else {
+    return formatMinutesToDecimal(finalMinutes);
+  }
+}
+
 function getDefaultRules(): RulesConfig {
   return {
+    timeFormat: {
+      enabled: false,
+      outputFormat: "HH:MM",
+      roundToSixMinutes: true,
+    },
     nameStandardisation: {
       enabled: false,
       caseSensitive: false,
@@ -4231,6 +4436,11 @@ function getCurrentRules(): RulesConfig {
   );
 
   return {
+    timeFormat: {
+      enabled: (document.getElementById("time-format-enabled") as HTMLInputElement)?.checked || false,
+      outputFormat: ((document.getElementById("time-format-output") as HTMLSelectElement)?.value as "HH:MM" | "XX.YY") || "HH:MM",
+      roundToSixMinutes: (document.getElementById("time-format-round") as HTMLInputElement)?.checked !== false,
+    },
     nameStandardisation: {
       enabled: (document.getElementById("name-standardisation-enabled") as HTMLInputElement)
         .checked,
@@ -4270,6 +4480,30 @@ function getCurrentRules(): RulesConfig {
 }
 
 function loadRulesConfig(rules: RulesConfig) {
+  // Load TimeFormat rule settings (with null checks for backward compatibility)
+  const timeFormatRule = rules.timeFormat || getDefaultRules().timeFormat;
+  
+  const timeFormatEnabledEl = document.getElementById("time-format-enabled") as HTMLInputElement;
+  if (timeFormatEnabledEl) {
+    timeFormatEnabledEl.checked = timeFormatRule.enabled;
+  }
+  
+  const timeFormatOutputEl = document.getElementById("time-format-output") as HTMLSelectElement;
+  if (timeFormatOutputEl) {
+    timeFormatOutputEl.value = timeFormatRule.outputFormat;
+  }
+  
+  const timeFormatRoundEl = document.getElementById("time-format-round") as HTMLInputElement;
+  if (timeFormatRoundEl) {
+    timeFormatRoundEl.checked = timeFormatRule.roundToSixMinutes;
+  }
+  
+  // Show/hide TimeFormat configuration based on enabled state
+  const timeFormatConfigDiv = document.getElementById("time-format-content");
+  if (timeFormatConfigDiv) {
+    timeFormatConfigDiv.style.display = timeFormatRule.enabled ? "block" : "none";
+  }
+
   // Load Name Standardisation rule settings
   const nameRule = rules.nameStandardisation;
 

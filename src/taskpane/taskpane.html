@@ -621,6 +621,79 @@
                 <div id="rules-content" class="dropdown-content" style="display: none">
                   <p class="ms-font-m">Configure automated data processing rules.</p>
 
+                  <!-- TimeFormat Rule Section -->
+                  <div class="dropdown-section">
+                    <div class="dropdown-header" data-target="time-format-content">
+                      <div style="display: flex; align-items: center; gap: 8px">
+                        <input
+                          type="checkbox"
+                          id="time-format-enabled"
+                          class="ms-Checkbox-input"
+                        />
+                        <h3 class="ms-font-l" style="margin: 0">TimeFormat</h3>
+                      </div>
+                      <span class="dropdown-arrow">▼</span>
+                    </div>
+                    <div
+                      id="time-format-content"
+                      class="dropdown-content"
+                      style="display: none"
+                    >
+                      <p class="ms-font-m">
+                        Standardize time entries to a consistent format with optional 6-minute rounding.
+                      </p>
+
+                      <div
+                        style="
+                          margin-top: 15px;
+                          padding: 15px;
+                          background-color: #f9f9f9;
+                          border-radius: 4px;
+                        "
+                      >
+                        <div class="ms-Grid">
+                          <div class="ms-Grid-row">
+                            <div class="ms-Grid-col ms-sm6">
+                              <label class="ms-Label ms-font-s">Output Format:</label>
+                              <select
+                                id="time-format-output"
+                                class="ms-Dropdown"
+                                style="width: 100%; padding: 8px; margin-top: 5px"
+                              >
+                                <option value="HH:MM">HH:MM (hours:minutes)</option>
+                                <option value="XX.YY">XX.YY (decimal hours)</option>
+                              </select>
+                              <p class="ms-font-xs" style="color: #666; margin-top: 5px">
+                                Choose how time entries should be formatted in the Amended Time column
+                              </p>
+                            </div>
+                            <div class="ms-Grid-col ms-sm6">
+                              <input
+                                type="checkbox"
+                                id="time-format-round"
+                                class="ms-Checkbox-input"
+                                checked
+                              />
+                              <label for="time-format-round" class="ms-Label ms-font-s"
+                                >Round to 6-minute increments</label
+                              >
+                              <p class="ms-font-xs" style="color: #666; margin-top: 5px; margin-left: 20px">
+                                Round times to nearest 6-minute billing increment (0.1 hour)
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style="margin-top: 15px; padding: 10px; background-color: #e6f3ff; border-radius: 4px;">
+                          <p class="ms-font-xs" style="margin: 0; color: #0066cc;">
+                            <strong>Note:</strong> This rule processes the Time column and puts standardized values in the Amended Time column. 
+                            It accepts both HH:MM format (e.g., "1:30") and decimal format (e.g., "1.5") as input.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <!-- Name Standardisation Rule Section -->
                   <div class="dropdown-section">
                     <div class="dropdown-header" data-target="name-standardisation-content">
