@@ -32,6 +32,7 @@ Office.onReady((info) => {
     document.getElementById("save-matter").onclick = saveMatterProfile;
     document.getElementById("delete-matter").onclick = deleteMatterProfile;
     document.getElementById("save-current-settings").onclick = saveCurrentSettings;
+    document.getElementById("save-matter-profile").onclick = saveMatterProfileFromDropdown;
 
     // Fee Earners functionality
     document.getElementById("add-fee-earner").onclick = () => addFeeEarnerRow();
@@ -1361,6 +1362,9 @@ const DEFAULT_NICKNAMES: Record<string, string> = {
 // Matter Profile Management
 interface MatterProfile {
   name: string;
+  clientName?: string;
+  clientNumber?: string;
+  matterNumber?: string;
   headerBgColor: string;
   headerTextColor: string;
   altRowColor1: string;
@@ -1383,6 +1387,9 @@ interface MatterProfile {
 function getCurrentSettings(): MatterProfile {
   return {
     name: "",
+    clientName: (document.getElementById("client-name") as HTMLInputElement)?.value || "",
+    clientNumber: (document.getElementById("client-number") as HTMLInputElement)?.value || "",
+    matterNumber: (document.getElementById("matter-number") as HTMLInputElement)?.value || "",
     headerBgColor: (document.getElementById("header-bg-color") as HTMLInputElement).value,
     headerTextColor: (document.getElementById("header-text-color") as HTMLInputElement).value,
     altRowColor1: (document.getElementById("alt-row-color1") as HTMLInputElement).value,
@@ -1409,6 +1416,16 @@ function getCurrentSettings(): MatterProfile {
 }
 
 function applySettings(profile: MatterProfile) {
+  // Apply matter profile fields
+  const matterProfileNameInput = document.getElementById("matter-profile-name") as HTMLInputElement;
+  if (matterProfileNameInput) {
+    matterProfileNameInput.value = profile.name || "";
+  }
+  (document.getElementById("client-name") as HTMLInputElement).value = profile.clientName || "";
+  (document.getElementById("client-number") as HTMLInputElement).value = profile.clientNumber || "";
+  (document.getElementById("matter-number") as HTMLInputElement).value = profile.matterNumber || "";
+  
+  // Apply formatting settings
   (document.getElementById("header-bg-color") as HTMLInputElement).value = profile.headerBgColor;
   (document.getElementById("header-text-color") as HTMLInputElement).value =
     profile.headerTextColor;
@@ -1686,21 +1703,134 @@ function saveCurrentSettings() {
     return;
   }
 
+  // Get the matter name from the Matter Profile dropdown if it was edited
+  const matterProfileNameInput = document.getElementById("matter-profile-name") as HTMLInputElement;
+  const newMatterName = matterProfileNameInput?.value?.trim();
+  
   const currentSettings = getCurrentSettings();
-  currentSettings.name = selectedMatter;
-
-  const profiles = getMatterProfiles();
-  const existingIndex = profiles.findIndex((p) => p.name === selectedMatter);
-
-  if (existingIndex >= 0) {
-    profiles[existingIndex] = currentSettings;
+  
+  // If the matter name was changed in the Matter Profile dropdown, update it
+  if (newMatterName && newMatterName !== selectedMatter) {
+    currentSettings.name = newMatterName;
+    
+    // Check if the new name already exists
+    const profiles = getMatterProfiles();
+    const nameExists = profiles.some(p => p.name === newMatterName && p.name !== selectedMatter);
+    
+    if (nameExists) {
+      showMessage(
+        `A matter profile with the name "${newMatterName}" already exists. Please choose a different name.`,
+        "error"
+      );
+      return;
+    }
+    
+    // Remove the old profile and add with new name
+    const existingIndex = profiles.findIndex((p) => p.name === selectedMatter);
+    if (existingIndex >= 0) {
+      profiles.splice(existingIndex, 1);
+    }
+    profiles.push(currentSettings);
     saveMatterProfiles(profiles);
+    
+    // Update the dropdown to reflect the new name
+    loadMatterProfiles();
+    (document.getElementById("matter-select") as HTMLSelectElement).value = newMatterName;
+    
     showMessage(
-      `Matter profile "${selectedMatter}" updated successfully with current settings.`,
+      `Matter profile renamed from "${selectedMatter}" to "${newMatterName}" and updated successfully.`,
       "success"
     );
   } else {
-    showMessage("Selected matter profile not found. Please create a new profile first.", "error");
+    // Keep the existing name
+    currentSettings.name = selectedMatter;
+    
+    const profiles = getMatterProfiles();
+    const existingIndex = profiles.findIndex((p) => p.name === selectedMatter);
+
+    if (existingIndex >= 0) {
+      profiles[existingIndex] = currentSettings;
+      saveMatterProfiles(profiles);
+      showMessage(
+        `Matter profile "${selectedMatter}" updated successfully with current settings.`,
+        "success"
+      );
+    } else {
+      showMessage("Selected matter profile not found. Please create a new profile first.", "error");
+    }
+  }
+}
+
+function saveMatterProfileFromDropdown() {
+  const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+
+  if (!selectedMatter) {
+    showMessage(
+      "Please select a matter from the dropdown first to save matter profile data.",
+      "error"
+    );
+    return;
+  }
+
+  // Get the matter name from the Matter Profile dropdown
+  const matterProfileNameInput = document.getElementById("matter-profile-name") as HTMLInputElement;
+  const newMatterName = matterProfileNameInput?.value?.trim();
+  
+  if (!newMatterName) {
+    showMessage("Please enter a matter name.", "error");
+    return;
+  }
+
+  const currentSettings = getCurrentSettings();
+  currentSettings.name = newMatterName;
+
+  const profiles = getMatterProfiles();
+  
+  // If the matter name was changed, handle renaming
+  if (newMatterName !== selectedMatter) {
+    // Check if the new name already exists
+    const nameExists = profiles.some(p => p.name === newMatterName);
+    
+    if (nameExists) {
+      showMessage(
+        `A matter profile with the name "${newMatterName}" already exists. Please choose a different name.`,
+        "error"
+      );
+      return;
+    }
+    
+    // Remove the old profile
+    const existingIndex = profiles.findIndex((p) => p.name === selectedMatter);
+    if (existingIndex >= 0) {
+      profiles.splice(existingIndex, 1);
+    }
+    
+    // Add with new name
+    profiles.push(currentSettings);
+    saveMatterProfiles(profiles);
+    
+    // Update the dropdown to reflect the new name
+    loadMatterProfiles();
+    (document.getElementById("matter-select") as HTMLSelectElement).value = newMatterName;
+    
+    showMessage(
+      `Matter profile renamed from "${selectedMatter}" to "${newMatterName}" and saved successfully.`,
+      "success"
+    );
+  } else {
+    // Update existing profile with same name
+    const existingIndex = profiles.findIndex((p) => p.name === selectedMatter);
+    
+    if (existingIndex >= 0) {
+      profiles[existingIndex] = currentSettings;
+      saveMatterProfiles(profiles);
+      showMessage(
+        `Matter profile "${selectedMatter}" updated successfully.`,
+        "success"
+      );
+    } else {
+      showMessage("Selected matter profile not found. Please create a new profile first.", "error");
+    }
   }
 }
 
