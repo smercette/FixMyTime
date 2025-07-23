@@ -3255,12 +3255,14 @@ async function applyTimeFormatRuleWithResult(): Promise<{
       debugMessages.push(`Output: ${timeFormatRule.outputFormat}, 6min rounding: ${timeFormatRule.roundToSixMinutes ? 'ON' : 'OFF'}`);
       debugMessages.push('---');
       
-      // If output format is HH:MM, format the entire Amended Time column as text first
+      // Format the entire Amended Time column appropriately
+      const amendedTimeColumn = worksheet.getCell(0, amendedTimeIndex).getEntireColumn();
       if (timeFormatRule.outputFormat === "HH:MM") {
-        const amendedTimeColumn = worksheet.getCell(0, amendedTimeIndex).getEntireColumn();
-        amendedTimeColumn.numberFormat = "@"; // Text format
-        await context.sync();
+        amendedTimeColumn.numberFormat = "@"; // Text format for HH:MM
+      } else {
+        amendedTimeColumn.numberFormat = "0.0"; // Number format with 1 decimal place for X.Y
       }
+      await context.sync();
       
       // Process each data row
       for (let rowIndex = 1; rowIndex < values.length; rowIndex++) {
@@ -4398,31 +4400,49 @@ function parseTimeToMinutes(timeStr: string, debugMessages?: string[]): number |
     }
   }
   
-  // Check for decimal format (e.g., "1.5", "2.25", "0.1")
+  // Check for decimal format
   const decimalMatch = trimmed.match(/^(\d+)\.(\d+)$/);
   if (decimalMatch) {
     const wholePart = parseInt(decimalMatch[1], 10);
-    const decimalPart = decimalMatch[2];
+    const decimalValue = parseFloat(trimmed);
     
-    // Handle different decimal interpretations
-    let fractionalHours: number;
-    if (decimalPart.length === 1) {
-      // Single digit after decimal (e.g., 0.1, 0.2, 0.5)
-      // Interpret as tenths of an hour
-      fractionalHours = parseInt(decimalPart, 10) / 10;
+    // Check if this looks like a fraction of a day (Excel time format)
+    // This includes values with many decimal places OR common day fractions like 0.25 (6 hours)
+    const isLikelyDayFraction = (wholePart === 0 && decimalMatch[2].length > 5) || 
+                               (decimalValue === 0.25 || decimalValue === 0.5 || decimalValue === 0.75) ||
+                               (wholePart === 0 && decimalValue < 0.1);
+    
+    if (isLikelyDayFraction && decimalValue < 1.0) {
+      // This is likely a fraction of a day (Excel internal time format)
+      // Convert from fraction of day to minutes
+      const totalMinutes = Math.round(decimalValue * 24 * 60);
+      if (debugMessages) {
+        debugMessages.push(`Parse: "${trimmed}" = ${decimalValue.toFixed(6)} day fraction = ${totalMinutes} min`);
+      }
+      return totalMinutes;
     } else {
-      // Multiple digits after decimal (e.g., 0.25, 0.75)
-      // Interpret as hundredths of an hour
-      fractionalHours = parseInt(decimalPart, 10) / Math.pow(10, decimalPart.length);
+      // Handle normal decimal hour formats
+      const decimalPart = decimalMatch[2];
+      let fractionalHours: number;
+      
+      if (decimalPart.length === 1) {
+        // Single digit after decimal (e.g., 0.1, 0.2, 0.5)
+        // Interpret as tenths of an hour
+        fractionalHours = parseInt(decimalPart, 10) / 10;
+      } else {
+        // Multiple digits after decimal (e.g., 0.25, 0.75)
+        // Interpret as decimal hours
+        fractionalHours = parseFloat(`0.${decimalPart}`);
+      }
+      
+      const totalHours = wholePart + fractionalHours;
+      const totalMinutes = Math.round(totalHours * 60);
+      
+      if (debugMessages) {
+        debugMessages.push(`Parse: "${trimmed}" = ${totalHours.toFixed(2)}h = ${totalMinutes} min`);
+      }
+      return totalMinutes;
     }
-    
-    const totalHours = wholePart + fractionalHours;
-    const totalMinutes = Math.round(totalHours * 60);
-    
-    if (debugMessages) {
-      debugMessages.push(`Parse: "${trimmed}" = ${totalHours.toFixed(2)}h = ${totalMinutes} min`);
-    }
-    return totalMinutes;
   }
   
   // Check if it's a whole number (assume hours, not minutes)
@@ -4453,10 +4473,8 @@ function formatMinutesToHHMM(minutes: number): string {
 }
 
 function formatMinutesToDecimal(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  const decimal = Math.round((remainingMinutes / 60) * 100);
-  return `${hours}.${decimal.toString().padStart(2, '0')}`;
+  const totalHours = minutes / 60;
+  return totalHours.toFixed(1);
 }
 
 function convertTimeFormat(timeStr: string, outputFormat: "HH:MM" | "XX.YY", roundToSix: boolean, debugMessages?: string[]): string | null {
