@@ -35,6 +35,15 @@ Office.onReady((info) => {
     document.getElementById("delete-matter").onclick = deleteMatterProfile;
     document.getElementById("save-current-settings").onclick = saveCurrentSettings;
     document.getElementById("save-matter-profile").onclick = saveMatterProfileFromDropdown;
+    
+    // Debug: Add a function to check localStorage
+    (window as any).debugMatterProfiles = () => {
+      const profiles = getMatterProfiles();
+      addDebugInfo(`Current matter profiles: ${JSON.stringify(profiles, null, 2)}`);
+      const stored = localStorage.getItem("fixmytime-matter-profiles");
+      addDebugInfo(`Raw localStorage data: ${stored}`);
+      return profiles;
+    };
 
     // Fee Earners functionality
     document.getElementById("add-fee-earner").onclick = () => addFeeEarnerRow();
@@ -103,7 +112,9 @@ Office.onReady((info) => {
     // Handle matter selection from dropdown
     const matterSelect = document.getElementById("matter-select") as HTMLSelectElement;
     matterSelect.onchange = () => {
+      addDebugInfo(`Matter select changed to: "${matterSelect.value}"`);
       if (matterSelect.value === "__new__") {
+        addDebugInfo("Add New Matter selected - showing new matter section");
         // Show new matter creation section and switch to Settings tab
         document.getElementById("new-matter-section").style.display = "block";
         switchToSettingsTab();
@@ -713,7 +724,6 @@ async function createNotesColumnWithFormatting(
   const existingHeaders = usedRange.values[0] as string[];
   const existingNotesIndex = findNotesColumn(existingHeaders);
   if (existingNotesIndex !== -1) {
-    console.log("WARNING: Notes column already exists, returning existing index");
     return existingNotesIndex;
   }
   
@@ -888,44 +898,6 @@ function showMessage(message: string, type: string, timeout?: number) {
   }, timeout || 5000);
 }
 
-function showDebugMessage(message: string) {
-  // Add to persistent debug area
-  addDebugInfo(message);
-  
-  // Also show temporary message
-  const messageDiv = document.getElementById("message");
-  const messageText = document.getElementById("message-text");
-
-  messageText.textContent = message;
-  messageDiv.style.display = "block";
-  messageDiv.className = "ms-MessageBar ms-MessageBar--info";
-
-  // Hide message after 15 seconds for debug messages
-  setTimeout(() => {
-    messageDiv.style.display = "none";
-  }, 15000);
-}
-
-function addDebugInfo(message: string) {
-  const debugArea = document.getElementById("debug-area");
-  const debugContent = document.getElementById("debug-content");
-  
-  if (debugArea && debugContent) {
-    debugArea.style.display = "block";
-    const timestamp = new Date().toLocaleTimeString();
-    debugContent.innerHTML += `\n[${timestamp}] ${message}`;
-  }
-}
-
-function clearDebugInfo() {
-  const debugArea = document.getElementById("debug-area");
-  const debugContent = document.getElementById("debug-content");
-  
-  if (debugArea && debugContent) {
-    debugContent.innerHTML = "";
-    debugArea.style.display = "none";
-  }
-}
 
 export async function colorCodeRows() {
   try {
@@ -969,7 +941,6 @@ export async function colorCodeRows() {
         // Check if this row has Missing Time formatting priority
         if (missingTimeRows.has(actualRowIndex)) {
           // Skip charge formatting for rows with Missing Time formatting
-          console.log(`Preserving Missing Time formatting for row ${row} (0-based: ${actualRowIndex})`);
           continue;
         }
 
@@ -1229,10 +1200,7 @@ export async function addColumns() {
           // Create Notes column at the far right with full formatting
           await createNotesColumnWithFormatting(worksheet, usedRange);
           processedColumns.push("Notes");
-          console.log("Created Notes column");
-        } else {
-          console.log(`Notes column already exists at index ${currentNotesIndex}`);
-        }
+          }
       }
 
       // Track skipped columns
@@ -1548,20 +1516,15 @@ function applySettings(profile: MatterProfile) {
 
 function loadMatterProfiles() {
   const profiles = getMatterProfiles();
+  addDebugInfo(`Loading matter profiles: Found ${profiles.length} profiles`);
   const selectElement = document.getElementById("matter-select") as HTMLSelectElement;
 
   // Clear existing options and rebuild with default options
   selectElement.innerHTML = '<option value="">-- Select a Matter --</option>';
 
-  // Debug: Show what matters are currently saved (temporary)
-  console.log(
-    `DEBUG: Loaded ${profiles.length} matter profiles:`,
-    profiles.map((p) => p.name).join(", ")
-  );
 
   // If no profiles exist, create a default one
   if (profiles.length === 0) {
-    console.log("No matter profiles found - they may have been cleared from localStorage");
 
     // Create a default "Project Apricot" matter profile to help user get started
     const defaultProfile: MatterProfile = {
@@ -1624,7 +1587,6 @@ function loadMatterProfiles() {
     };
 
     saveMatterProfiles([defaultProfile]);
-    console.log("Created default 'Project Apricot' matter profile");
   }
 
   // Get current profiles (including any newly created default)
@@ -1715,6 +1677,26 @@ function loadMatterProfile() {
     showMessage(`Matter profile "${selectedMatter}" loaded successfully.`, "success");
   } else {
     showMessage("Matter profile not found.", "error");
+  }
+}
+
+// Debug functions
+function addDebugInfo(message: string) {
+  const debugArea = document.getElementById("debug-area");
+  const debugContent = document.getElementById("debug-content");
+  if (debugArea && debugContent) {
+    debugArea.style.display = "block";
+    const timestamp = new Date().toLocaleTimeString();
+    debugContent.innerHTML += `[${timestamp}] ${message}\n`;
+  }
+}
+
+function clearDebugInfo() {
+  const debugArea = document.getElementById("debug-area");
+  const debugContent = document.getElementById("debug-content");
+  if (debugArea && debugContent) {
+    debugArea.style.display = "none";
+    debugContent.innerHTML = "";
   }
 }
 
@@ -3116,9 +3098,8 @@ async function applyAllRules() {
       }
     }
 
-    // Show final result (temporarily disabling formatting reapplication to debug Notes issue)
+    // Show final result and re-apply formatting
     if (appliedRules.length > 0) {
-      console.log("DEBUGGING: Skipping formatSpreadsheet() to preserve Notes");
 
       // Recalculate column widths for content-sensitive columns
       await recalculateColumnWidths(currentProfile);
@@ -3130,9 +3111,13 @@ async function applyAllRules() {
         allDebugInfo.forEach(info => addDebugInfo(info));
       }
       
+      // Re-apply formatting as final step
+      showMessage("Re-applying formatting...", "info");
+      await applyFormatting();
+      
       // Always show success message
       showMessage(
-        `Successfully applied ${rulesText}. Updated ${totalUpdatedRows} rows total. Undo is available.`,
+        `Successfully applied ${rulesText}. Updated ${totalUpdatedRows} rows total. Formatting re-applied. Undo is available.`,
         "success"
       );
     } else {
@@ -3151,7 +3136,6 @@ let missingTimeRows: Set<number> = new Set();
 // Helper function to clear Missing Time row tracking
 function clearMissingTimeRowTracking() {
   missingTimeRows.clear();
-  console.log("Cleared Missing Time row tracking");
 }
 
 // Helper function to recalculate column widths for content-sensitive columns
@@ -3188,8 +3172,6 @@ async function recalculateColumnWidths(currentProfile: any) {
         }
       }
       
-      console.log(`Recalculating widths for ${columnsToRecalculate.length} columns: ${columnsToRecalculate.map(c => c.name).join(", ")}`);
-      
       // Recalculate width for each identified column
       for (const col of columnsToRecalculate) {
         const column = worksheet.getCell(0, col.index).getEntireColumn();
@@ -3205,9 +3187,6 @@ async function recalculateColumnWidths(currentProfile: any) {
         if (column.format.columnWidth > maxColumnWidth) {
           column.format.columnWidth = maxColumnWidth;
           column.format.wrapText = true;
-          console.log(`Applied max width constraint to ${col.name}: ${maxColumnWidth}pts`);
-        } else {
-          console.log(`Column ${col.name} width: ${column.format.columnWidth}pts (within limit)`);
         }
       }
       
@@ -3255,9 +3234,6 @@ async function applyNeedsDetailRuleWithResult(): Promise<{
       const values = usedRange.values;
       const headers = values[0];
       
-      // Debug: Log all column headers
-      const headersList = headers.map((h, i) => `[${i}] "${h}"`).join(", ");
-      console.log("All headers:", headersList);
       
       // Find required columns - look for "Original Narrative" first, then "Narrative"
       let narrativeIndex = headers.findIndex((h) => 
@@ -3568,8 +3544,6 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
       let headers = [...(usedRange.values[0] as string[])];
       const entries = [];
       
-      console.log(`DEBUG: Headers found: ${headers.join(", ")}`);
-      console.log(`DEBUG: Total rows in sheet: ${usedRange.values.length}`);
 
       for (let i = 1; i < usedRange.values.length; i++) {
         const row = usedRange.values[i];
@@ -3582,12 +3556,6 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
         entries.push(entry);
       }
       
-      console.log(`DEBUG: Created ${entries.length} entries from data`);
-      if (entries.length > 0) {
-        console.log(`DEBUG: First entry structure:`, Object.keys(entries[0])
-          .map(k => `${k}: ${entries[0][k]}`)
-          .join(", "));
-      }
 
       // Find required columns with more flexible matching
       const feeEarnerCol = headers.findIndex((h) => {
@@ -3623,12 +3591,6 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
       });
 
       if (feeEarnerCol === -1 || dateCol === -1 || narrativeCol === -1) {
-        console.log(`ERROR: Column detection failed:`);
-        console.log(`  - Fee Earner column index: ${feeEarnerCol}`);
-        console.log(`  - Date column index: ${dateCol}`);
-        console.log(`  - Narrative column index: ${narrativeCol}`);
-        console.log(`  - Available headers: ${headers.map((h, i) => `[${i}] "${h}"`).join(", ")}`);
-        
         showMessage(
           `Missing Time rule failed: Cannot find required columns. Fee Earner: ${feeEarnerCol >= 0 ? "✓" : "✗"}, Date: ${dateCol >= 0 ? "✓" : "✗"}, Narrative: ${narrativeCol >= 0 ? "✓" : "✗"}`,
           "error"
@@ -3641,16 +3603,9 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
         };
       }
 
-      console.log(
-        `Missing Time Rule: Using columns - FeeEarner: ${headers[feeEarnerCol]}, Date: ${headers[dateCol]}, Narrative: ${headers[narrativeCol]}`
-      );
 
       // Get fee earners list for name matching
       const feeEarners = currentProfile.feeEarners || [];
-      console.log(`Fee earners available: ${feeEarners.map((fe) => fe.name).join(", ")}`);
-      console.log(`Meeting keywords: ${missingTimeRule.meetingKeywords.join(", ")}`);
-      console.log(`Date tolerance: ${missingTimeRule.dateTolerance} days`);
-      console.log(`Total entries to process: ${entries.length}`);
 
       // Show initial debugging info
       showMessage(
@@ -3682,18 +3637,9 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
 
         // Skip if no narrative or missing key data
         if (!narrative || !entryFeeEarner || !entryDate) {
-          console.log(
-            `Skipping entry ${processedCount}: missing data - narrative: ${!!narrative}, feeEarner: ${!!entryFeeEarner}, date: ${!!entryDate}`
-          );
           continue;
         }
 
-        // Debug log for Callum Reyes entries
-        if (narrative.includes("callum") || narrative.includes("reyes")) {
-          console.log(
-            `DEBUG: Found potential Callum Reyes entry - Row: ${entry.rowIndex}, Narrative: "${narrative}", FeeEarner: "${entryFeeEarner}", Date: "${entryDate}"`
-          );
-        }
 
         // Debug first few entries - removed old debug
 
@@ -3705,20 +3651,11 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
           // Create a regex for word boundary matching
           const keywordRegex = new RegExp(`\\b${escapeRegex(keyword.toLowerCase())}\\b`, "i");
           const matches = keywordRegex.test(narrative);
-          if (matches && processedCount <= 5) {
-            console.log(
-              `  Entry ${processedCount}: Keyword "${keyword}" matched in: "${narrative.substring(0, 80)}..."`
-            );
-            // Found keyword - debug info removed
-          }
           return matches;
         });
 
         if (containsMeetingKeyword) {
           meetingEntriesFound++;
-          console.log(
-            `Found meeting entry ${meetingEntriesFound}: "${narrative}" by ${entryFeeEarner} on ${entryDate}`
-          );
           
           // Meeting found - debug info removed
 
@@ -3736,9 +3673,7 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
             const keywordRegex = new RegExp(`\\b${escapeRegex(keyword.toLowerCase())}\\b`, "i");
             return keywordRegex.test(narrative);
           });
-          console.log(`  Matched keyword: "${matchedKeyword}"`);
-          console.log(`  Now searching for fee earner names in narrative...`);
-          // Checking fee earners - debug info removed
+          // Checking fee earners
           
           // Find mentioned fee earners in the narrative
           const mentionedFeeEarners = feeEarners
@@ -3763,9 +3698,6 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
                 (firstNameRegex.test(narrative) && lastNameRegex && lastNameRegex.test(narrative));
 
               if (ismentioned) {
-                console.log(
-                  `  Found mentioned fee earner: ${feeEarner.name} in narrative: "${narrative.substring(0, 100)}..."`
-                );
                 // Found mentioned fee earner - debug info removed
               } else {
                 // Additional debug logging for names that weren't matched
@@ -3773,24 +3705,16 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
                   narrative.toLowerCase().includes(firstName) ||
                   narrative.toLowerCase().includes(fullName)
                 ) {
-                  console.log(
-                    `  DEBUG: ${feeEarner.name} partially matches but failed regex test in: "${narrative.substring(0, 100)}..."`
-                  );
+                  // Name appears in narrative but didn't match word boundary rules
                 }
               }
               return ismentioned;
             })
             .filter((feeEarner) => {
               const isDifferentPerson = feeEarner.name !== entryFeeEarner;
-              if (!isDifferentPerson) {
-                console.log(`  Excluding ${feeEarner.name} as they are the entry creator`);
-              }
               return isDifferentPerson;
             });
 
-          console.log(
-            `  Final mentioned fee earners for reciprocal check: ${mentionedFeeEarners.map((fe) => fe.name).join(", ")}`
-          );
 
           // Check if mentioned fee earners have reciprocal entries
           for (const mentionedFeeEarner of mentionedFeeEarners) {
@@ -3809,9 +3733,7 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
               if (otherFeeEarner.toLowerCase() !== mentionedFeeEarner.name.toLowerCase()) {
                 // Debug log only for Callum entries
                 if (mentionedFeeEarner.name.toLowerCase().includes("callum") && 
-                    otherFeeEarner.toLowerCase().includes("callum")) {
-                  console.log(`      Name mismatch: "${otherFeeEarner}" !== "${mentionedFeeEarner.name}"`);
-                }
+                    otherFeeEarner.toLowerCase().includes("callum"))
                 return false;
               }
 
@@ -3821,11 +3743,6 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
                 otherDate,
                 missingTimeRule.dateTolerance
               );
-              if (!datesMatch && mentionedFeeEarner.name.toLowerCase().includes("callum")) {
-                console.log(
-                  `      Date mismatch for ${mentionedFeeEarner.name}: entry date ${entryDate} vs other date ${otherDate}`
-                );
-              }
               if (!datesMatch) return false;
 
               // Check if the reciprocal narrative mentions the original fee earner AND contains meeting keywords
@@ -3846,38 +3763,23 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
                 return keywordRegex.test(otherNarrative);
               });
               
-              // Debug logging for Callum entries
-              if (mentionedFeeEarner.name.toLowerCase().includes("callum")) {
-                console.log(`      Checking reciprocal for ${mentionedFeeEarner.name}:`);
-                console.log(`        - Other narrative: "${otherNarrative.substring(0, 100)}..."`);
-                console.log(`        - Mentions original fee earner (${entryFeeEarner})? ${mentionsOriginalFeeEarner}`);
-                console.log(`        - Contains meeting keyword? ${containsMeetingKeyword}`);
-              }
               
               // BOTH conditions must be met
               return mentionsOriginalFeeEarner && containsMeetingKeyword;
             });
 
             if (!hasReciprocalEntry) {
-              console.log(
-                `    Missing reciprocal entry: ${mentionedFeeEarner.name} should have entry for ${entryDate}`
-              );
               missingEntries.push({
                 originalEntry: entry,
                 missingFeeEarner: mentionedFeeEarner,
                 date: entryDate,
                 narrative: narrative,
               });
-            } else {
-              console.log(`    Found reciprocal entry for ${mentionedFeeEarner.name}`);
             }
           }
         }
       }
 
-      console.log(
-        `Processing complete: ${processedCount} entries processed, ${meetingEntriesFound} meeting entries found, ${missingEntries.length} missing reciprocal entries identified`
-      );
 
       // Show detailed processing results in the UI
       showMessage(
@@ -3888,26 +3790,12 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
       // If no meeting entries were found, provide more detail
       if (meetingEntriesFound === 0) {
         const debugMsg = `No meetings found. Keywords: ${missingTimeRule.meetingKeywords.join(", ")}`;
-        console.log("WARNING: No meeting entries found!");
-        console.log("Check that:");
-        console.log("  1. Meeting keywords are configured correctly");
-        console.log("  2. Narratives contain these keywords with word boundaries");
-        console.log("  3. The narrative column is being read correctly");
-        // Debug message removed
         showMessage(
           "Missing Time rule found no entries with meeting keywords. Check debug area for details.",
           "warning"
         );
       }
       
-      // If meeting entries found but no missing entries identified
-      if (meetingEntriesFound > 0 && missingEntries.length === 0) {
-        console.log("INFO: Meeting entries found but no missing reciprocal entries");
-        console.log("This could mean:");
-        console.log("  1. All fee earners have reciprocal entries");
-        console.log("  2. No fee earner names were found in narratives");
-        console.log("  3. Fee earner names don't match between spreadsheet and configuration");
-      }
 
       // Add notes to rows about missing entries and apply formatting
       // Get the header row to find Notes column
@@ -3915,8 +3803,6 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
       let notesColumnIndex = findNotesColumn(headerRow);
 
       if (notesColumnIndex === -1) {
-        console.log("Notes column not found, creating simple Notes column...");
-        
         // Create a simple Notes column without complex formatting
         const originalColumnCount = usedRange.columnCount;
         const newColumnIndex = originalColumnCount;
@@ -3939,8 +3825,6 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
         
         // Update our working variables (create a new array to avoid read-only issues)
         headers = [...(newUsedRange.values[0] as string[])];
-        console.log(`Created simple Notes column at index ${notesColumnIndex}`);
-        console.log(`Updated headers: ${headers.join(", ")}`);
         
         // Apply consistent formatting to match other columns
         const notesHeaderCell = worksheet.getCell(0, notesColumnIndex);
@@ -4011,12 +3895,8 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
           notesColumn.format.columnWidth = maxColumnWidth;
           notesColumn.format.wrapText = true;
         }
-      } else {
-        console.log(`Found existing Notes column at index ${notesColumnIndex}`);
       }
 
-      console.log(`DEBUG: About to process ${missingEntries.length} missing entries`);
-      console.log(`DEBUG: Notes column index is ${notesColumnIndex}`);
       
       // Debug message removed - now shown in debug area
       
@@ -4033,18 +3913,10 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
         const existingNotes = notesCell.values[0][0]?.toString() || "";
         const updatedNotes = addNoteToRow(existingNotes, noteText);
 
-        console.log(
-          `Row ${rowIndex + 1} (Excel row): Column ${notesColumnIndex}, Existing notes: "${existingNotes}", Adding: "${noteText}", Result: "${updatedNotes}"`
-        );
 
         if (updatedNotes !== existingNotes) {
           // Update the Notes cell
           notesCell.values = [[updatedNotes]];
-          console.log(`Setting notes cell at row ${rowIndex}, col ${notesColumnIndex} to: "${updatedNotes}"`);
-
-          console.log(
-            `Updated Notes cell at row ${rowIndex}, column ${notesColumnIndex} with: "${updatedNotes}"`
-          );
 
           // Apply pale blue formatting to the entire row to highlight missing time
           const rowRange = worksheet.getCell(rowIndex, 0).getEntireRow();
@@ -4056,9 +3928,6 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
           await context.sync();
           updatedCount++;
 
-          console.log(`Applied pale blue formatting to row ${rowIndex}`);
-        } else {
-          console.log(`No change needed for row ${rowIndex} - note already exists`);
         }
 
         // Create placeholder entry if enabled
