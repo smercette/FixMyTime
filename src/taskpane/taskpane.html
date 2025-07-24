@@ -964,6 +964,66 @@
                     </div>
                   </div>
 
+                  <!-- NeedsDetail Rule Section -->
+                  <div class="dropdown-section">
+                    <div class="dropdown-header" data-target="needs-detail-content">
+                      <div style="display: flex; align-items: center; gap: 8px">
+                        <input
+                          type="checkbox"
+                          id="needs-detail-enabled"
+                          class="ms-Checkbox-input"
+                        />
+                        <h3 class="ms-font-l" style="margin: 0">Needs Detail</h3>
+                      </div>
+                      <span class="dropdown-arrow">▼</span>
+                    </div>
+                    <div
+                      id="needs-detail-content"
+                      class="dropdown-content"
+                      style="display: none"
+                    >
+                      <p class="ms-font-m">
+                        Flag entries with insufficient narrative detail and set their charge status to Query.
+                      </p>
+
+                      <div
+                        style="
+                          margin-top: 15px;
+                          padding: 15px;
+                          background-color: #f9f9f9;
+                          border-radius: 4px;
+                        "
+                      >
+                        <div class="ms-Grid">
+                          <div class="ms-Grid-row">
+                            <div class="ms-Grid-col ms-sm6">
+                              <label class="ms-Label ms-font-s">Minimum word count:</label>
+                              <input
+                                id="min-word-count"
+                                type="number"
+                                class="ms-TextField-field"
+                                value="3"
+                                min="1"
+                                max="20"
+                                style="width: 80px; margin-top: 5px"
+                              />
+                              <p class="ms-font-xs" style="color: #666; margin-top: 5px">
+                                Narratives with fewer words will be flagged as needing detail
+                              </p>
+                            </div>
+                            <div class="ms-Grid-col ms-sm6">
+                              <p class="ms-font-s" style="margin-top: 20px; color: #666;">
+                                <strong>Actions taken:</strong><br/>
+                                • Add "Needs Detail" to Notes column<br/>
+                                • Set Charge column to "Q" (Query)
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <!-- Save Rule Settings Button -->
                   <hr style="margin: 30px 0" />
                   <div style="text-align: center">

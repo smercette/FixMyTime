@@ -27,6 +27,8 @@ Office.onReady((info) => {
     document.getElementById("app-body").style.display = "flex";
     document.getElementById("apply-formatting").onclick = applyFormatting;
     document.getElementById("apply-all-rules").onclick = applyAllRules;
+    // Clear any previous debug info on initialization
+    clearDebugInfo();
 
     // Matter profile functionality
     document.getElementById("save-matter").onclick = saveMatterProfile;
@@ -82,6 +84,17 @@ Office.onReady((info) => {
       const configDiv = document.getElementById("missing-time-entries-content");
       configDiv.style.display = missingTimeEntriesToggle.checked ? "block" : "none";
     };
+
+    // NeedsDetail rule toggle
+    const needsDetailToggle = document.getElementById("needs-detail-enabled") as HTMLInputElement;
+    if (needsDetailToggle) {
+      needsDetailToggle.onchange = () => {
+        const configDiv = document.getElementById("needs-detail-content");
+        if (configDiv) {
+          configDiv.style.display = needsDetailToggle.checked ? "block" : "none";
+        }
+      };
+    }
 
     // Make functions available globally for onclick handlers
     (window as any).removeFeeEarnerRow = removeFeeEarnerRow;
@@ -191,7 +204,8 @@ function collapseNestedRuleDropdowns() {
   const nestedDropdowns = [
     { contentId: "time-format-content", headerSelector: '[data-target="time-format-content"]' },
     { contentId: "name-standardisation-content", headerSelector: '[data-target="name-standardisation-content"]' },
-    { contentId: "missing-time-entries-content", headerSelector: '[data-target="missing-time-entries-content"]' }
+    { contentId: "missing-time-entries-content", headerSelector: '[data-target="missing-time-entries-content"]' },
+    { contentId: "needs-detail-content", headerSelector: '[data-target="needs-detail-content"]' }
   ];
   
   nestedDropdowns.forEach(dropdown => {
@@ -903,6 +917,16 @@ function addDebugInfo(message: string) {
   }
 }
 
+function clearDebugInfo() {
+  const debugArea = document.getElementById("debug-area");
+  const debugContent = document.getElementById("debug-content");
+  
+  if (debugArea && debugContent) {
+    debugContent.innerHTML = "";
+    debugArea.style.display = "none";
+  }
+}
+
 export async function colorCodeRows() {
   try {
     await Excel.run(async (context) => {
@@ -1299,10 +1323,16 @@ interface TimeFormatRule {
   roundToSixMinutes: boolean; // round to nearest 6-minute increment
 }
 
+interface NeedsDetailRule {
+  enabled: boolean;
+  minWordCount: number; // minimum number of words required in narrative
+}
+
 interface RulesConfig {
   timeFormat: TimeFormatRule;
   nameStandardisation: NameStandardisationRule;
   missingTimeEntries: MissingTimeEntriesRule;
+  needsDetail: NeedsDetailRule;
 }
 
 // Built-in nickname database
@@ -2993,6 +3023,9 @@ async function applyAllRules() {
     // Clear any previous Missing Time row tracking
     clearMissingTimeRowTracking();
     
+    // Clear debug info before starting
+    clearDebugInfo();
+    
     // Get current matter and its rules
     const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
     if (!selectedMatter) {
@@ -3066,6 +3099,23 @@ async function applyAllRules() {
       showMessage("Missing Time Entries rule is disabled - skipping", "info");
     }
 
+    // Apply NeedsDetail Rule if enabled
+    if (currentProfile.rules.needsDetail?.enabled) {
+      showMessage("Applying NeedsDetail rule...", "info");
+
+      const result = await applyNeedsDetailRuleWithResult();
+      if (result.success) {
+        appliedRules.push("NeedsDetail");
+        totalUpdatedRows += result.updatedRows;
+        if (result.debugInfo) {
+          allDebugInfo.push(result.debugInfo);
+        }
+      } else if (result.error) {
+        showMessage(`NeedsDetail failed: ${result.error}`, "error");
+        return;
+      }
+    }
+
     // Show final result (temporarily disabling formatting reapplication to debug Notes issue)
     if (appliedRules.length > 0) {
       console.log("DEBUGGING: Skipping formatSpreadsheet() to preserve Notes");
@@ -3075,16 +3125,16 @@ async function applyAllRules() {
 
       const rulesText = appliedRules.join(", ");
       
-      // If we have debug info, show it
+      // If we have debug info, show it in the debug area
       if (allDebugInfo.length > 0) {
-        const debugMessage = allDebugInfo.join('\n\n---\n\n');
-        showMessage(debugMessage, "info", 20000); // Show for 20 seconds
-      } else {
-        showMessage(
-          `Successfully applied ${rulesText}. Updated ${totalUpdatedRows} rows total. (Format reapplication disabled for debugging). Undo is available.`,
-          "success"
-        );
+        allDebugInfo.forEach(info => addDebugInfo(info));
       }
+      
+      // Always show success message
+      showMessage(
+        `Successfully applied ${rulesText}. Updated ${totalUpdatedRows} rows total. Undo is available.`,
+        "success"
+      );
     } else {
       showMessage("No rules were enabled for this matter profile.", "info");
     }
@@ -3170,6 +3220,159 @@ async function recalculateColumnWidths(currentProfile: any) {
 }
 
 // Helper function to apply Name Standardisation and return result
+async function applyNeedsDetailRuleWithResult(): Promise<{
+  success: boolean;
+  updatedRows: number;
+  error?: string;
+  debugInfo?: string;
+}> {
+  try {
+    // Get current matter and its rules
+    const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+    if (!selectedMatter) {
+      return { success: false, updatedRows: 0, error: "No matter selected" };
+    }
+
+    const profiles = getMatterProfiles();
+    const currentProfile = profiles.find((p) => p.name === selectedMatter);
+    if (!currentProfile || !currentProfile.rules || !currentProfile.rules.needsDetail) {
+      return { success: false, updatedRows: 0, error: "NeedsDetail rule not configured" };
+    }
+
+    const needsDetailRule = currentProfile.rules.needsDetail;
+    
+    return await Excel.run(async (context) => {
+      const worksheet = context.workbook.worksheets.getActiveWorksheet();
+      const usedRange = worksheet.getUsedRange();
+      usedRange.load("values");
+      
+      await context.sync();
+      
+      if (!usedRange.values || usedRange.values.length === 0) {
+        return { success: false, updatedRows: 0, error: "No data found in worksheet" };
+      }
+      
+      const values = usedRange.values;
+      const headers = values[0];
+      
+      // Debug: Log all column headers
+      const headersList = headers.map((h, i) => `[${i}] "${h}"`).join(", ");
+      console.log("All headers:", headersList);
+      
+      // Find required columns - look for "Original Narrative" first, then "Narrative"
+      let narrativeIndex = headers.findIndex((h) => 
+        h?.toString().toLowerCase() === "original narrative"
+      );
+      
+      // If "Original Narrative" not found, try just "Narrative"
+      if (narrativeIndex === -1) {
+        narrativeIndex = headers.findIndex((h) => 
+          h?.toString().toLowerCase() === "narrative"
+        );
+      }
+      const chargeIndex = headers.findIndex((h) => h?.toString().toLowerCase() === "charge");
+      let notesIndex = headers.findIndex((h) => h?.toString().toLowerCase() === "notes");
+      
+      if (narrativeIndex === -1) {
+        // Try to find alternative narrative columns
+        const altNarrativeIndex = headers.findIndex((h) => {
+          const headerLower = h?.toString().toLowerCase() || "";
+          return headerLower.includes("description") || 
+                 headerLower.includes("details") || 
+                 headerLower.includes("work") ||
+                 headerLower.includes("task");
+        });
+        
+        if (altNarrativeIndex !== -1) {
+          return { success: false, updatedRows: 0, error: `Narrative column not found. Found possible alternative: "${headers[altNarrativeIndex]}" at index ${altNarrativeIndex}. Headers: ${headersList}` };
+        }
+        return { success: false, updatedRows: 0, error: `Narrative column not found. Available headers: ${headersList}` };
+      }
+      
+      // Create Notes column if it doesn't exist
+      if (notesIndex === -1) {
+        const newColumnIndex = headers.length;
+        const insertRange = worksheet.getCell(0, newColumnIndex);
+        insertRange.values = [["Notes"]];
+        notesIndex = newColumnIndex;
+        headers.push("Notes");
+        await context.sync();
+      }
+      
+      // Create Charge column if it doesn't exist
+      let chargeColumnIndex = chargeIndex;
+      if (chargeIndex === -1) {
+        const newColumnIndex = headers.length;
+        const insertRange = worksheet.getCell(0, newColumnIndex);
+        insertRange.values = [["Charge"]];
+        chargeColumnIndex = newColumnIndex;
+        headers.push("Charge");
+        await context.sync();
+      }
+      
+      let updatedRows = 0;
+      let debugMessages: string[] = [];
+      
+      debugMessages.push(`Narrative column: index ${narrativeIndex} (header: "${headers[narrativeIndex]}")`);
+      debugMessages.push(`Charge column: index ${chargeColumnIndex} (header: "${headers[chargeColumnIndex] || 'CREATED'}")`);
+      debugMessages.push(`Notes column: index ${notesIndex} (header: "${headers[notesIndex] || 'CREATED'}")`);
+      debugMessages.push(`Min word count: ${needsDetailRule.minWordCount}`);
+      debugMessages.push(`Total rows to process: ${values.length - 1}`);
+      debugMessages.push('---');
+      
+      // Process each data row
+      for (let rowIndex = 1; rowIndex < values.length; rowIndex++) {
+        const narrativeValue = values[rowIndex][narrativeIndex];
+        if (!narrativeValue) continue;
+        
+        const narrativeText = narrativeValue.toString().trim();
+        const wordCount = narrativeText.split(/\s+/).filter(word => word.length > 0).length;
+        
+        // Log first 5 rows for debugging
+        if (rowIndex <= 5) {
+          debugMessages.push(`Row ${rowIndex}: "${narrativeText.substring(0, 50)}..." (${wordCount} words)`);
+        }
+        
+        if (wordCount < needsDetailRule.minWordCount) {
+          // Update Charge column to 'Q'
+          if (chargeColumnIndex >= 0) {
+            const chargeCell = worksheet.getCell(rowIndex, chargeColumnIndex);
+            chargeCell.values = [["Q"]];
+          }
+          
+          // Update Notes column
+          const currentNotes = values[rowIndex][notesIndex]?.toString() || "";
+          const newNote = "Needs Detail";
+          const updatedNotes = currentNotes ? `${currentNotes}, ${newNote}` : newNote;
+          
+          const notesCell = worksheet.getCell(rowIndex, notesIndex);
+          notesCell.values = [[updatedNotes]];
+          
+          updatedRows++;
+          
+          // Log when a row is updated
+          if (updatedRows <= 5) {
+            debugMessages.push(`  -> UPDATED Row ${rowIndex}: Set Charge to 'Q', Notes to '${updatedNotes}'`);
+          }
+        }
+      }
+      
+      await context.sync();
+      
+      // Add summary to debug messages
+      debugMessages.push('---');
+      debugMessages.push(`Summary: Updated ${updatedRows} rows that had less than ${needsDetailRule.minWordCount} words`);
+      
+      // Return debug info
+      const debugText = `NeedsDetail Debug:\n${debugMessages.join('\n')}`;
+      
+      return { success: true, updatedRows: updatedRows, debugInfo: debugText };
+    });
+  } catch (error) {
+    return { success: false, updatedRows: 0, error: error.message };
+  }
+}
+
 async function applyTimeFormatRuleWithResult(): Promise<{
   success: boolean;
   updatedRows: number;
@@ -3465,7 +3668,7 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
       let processedCount = 0;
       let meetingEntriesFound = 0;
       
-      addDebugInfo(`Processing ${entries.length} total entries`);
+      // Debug info moved to return value
 
       for (const entry of entries) {
         processedCount++;
@@ -3492,10 +3695,7 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
           );
         }
 
-        // Debug first few entries
-        if (processedCount <= 3) {
-          addDebugInfo(`Entry ${processedCount}: Narrative="${narrative.substring(0, 60)}..."`);
-        }
+        // Debug first few entries - removed old debug
 
         // Check if narrative contains meeting keywords (with word boundary check)
         const containsMeetingKeyword = missingTimeRule.meetingKeywords.some((keyword) => {
@@ -3509,7 +3709,7 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
             console.log(
               `  Entry ${processedCount}: Keyword "${keyword}" matched in: "${narrative.substring(0, 80)}..."`
             );
-            addDebugInfo(`Found keyword "${keyword}" in entry ${processedCount}`);
+            // Found keyword - debug info removed
           }
           return matches;
         });
@@ -3520,7 +3720,7 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
             `Found meeting entry ${meetingEntriesFound}: "${narrative}" by ${entryFeeEarner} on ${entryDate}`
           );
           
-          addDebugInfo(`Meeting ${meetingEntriesFound}: ${entryFeeEarner} on ${entryDate}`);
+          // Meeting found - debug info removed
 
           // Show first few meeting entries found (to avoid spam)
           if (meetingEntriesFound <= 3) {
@@ -3538,7 +3738,7 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
           });
           console.log(`  Matched keyword: "${matchedKeyword}"`);
           console.log(`  Now searching for fee earner names in narrative...`);
-          addDebugInfo(`Checking ${feeEarners.length} fee earners against narrative`);
+          // Checking fee earners - debug info removed
           
           // Find mentioned fee earners in the narrative
           const mentionedFeeEarners = feeEarners
@@ -3566,7 +3766,7 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
                 console.log(
                   `  Found mentioned fee earner: ${feeEarner.name} in narrative: "${narrative.substring(0, 100)}..."`
                 );
-                addDebugInfo(`Found mentioned: ${feeEarner.name}`);
+                // Found mentioned fee earner - debug info removed
               } else {
                 // Additional debug logging for names that weren't matched
                 if (
@@ -3693,7 +3893,7 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
         console.log("  1. Meeting keywords are configured correctly");
         console.log("  2. Narratives contain these keywords with word boundaries");
         console.log("  3. The narrative column is being read correctly");
-        addDebugInfo(debugMsg);
+        // Debug message removed
         showMessage(
           "Missing Time rule found no entries with meeting keywords. Check debug area for details.",
           "warning"
@@ -3818,8 +4018,7 @@ async function applyMissingTimeEntriesRuleWithResult(): Promise<{
       console.log(`DEBUG: About to process ${missingEntries.length} missing entries`);
       console.log(`DEBUG: Notes column index is ${notesColumnIndex}`);
       
-      // Show visible debug message with longer timeout
-      showDebugMessage(`DEBUG: Found ${missingEntries.length} missing entries, Notes column at index ${notesColumnIndex}`);
+      // Debug message removed - now shown in debug area
       
       let updatedCount = 0;
       for (const missing of missingEntries) {
@@ -4519,6 +4718,10 @@ function getDefaultRules(): RulesConfig {
       requireExactTimeMatch: false,
       createMissingEntries: false,
     },
+    needsDetail: {
+      enabled: false,
+      minWordCount: 3,
+    },
   };
 }
 
@@ -4574,6 +4777,13 @@ function getCurrentRules(): RulesConfig {
         (document.getElementById("exact-time-match") as HTMLInputElement)?.checked || false,
       createMissingEntries:
         (document.getElementById("create-missing-entries") as HTMLInputElement)?.checked || false,
+    },
+    needsDetail: {
+      enabled: (document.getElementById("needs-detail-enabled") as HTMLInputElement)?.checked || false,
+      minWordCount: parseInt(
+        (document.getElementById("min-word-count") as HTMLInputElement)?.value || "3",
+        10
+      ),
     },
   };
 }
@@ -4670,6 +4880,25 @@ function loadRulesConfig(rules: RulesConfig) {
   if (missingTimeConfigDiv) {
     missingTimeConfigDiv.style.display = missingTimeRule.enabled ? "block" : "none";
   }
+
+  // Load NeedsDetail rule settings (with null checks for backward compatibility)
+  const needsDetailRule = rules.needsDetail || getDefaultRules().needsDetail;
+
+  const needsDetailEnabledEl = document.getElementById("needs-detail-enabled") as HTMLInputElement;
+  if (needsDetailEnabledEl) {
+    needsDetailEnabledEl.checked = needsDetailRule.enabled;
+  }
+
+  const minWordCountEl = document.getElementById("min-word-count") as HTMLInputElement;
+  if (minWordCountEl) {
+    minWordCountEl.value = needsDetailRule.minWordCount.toString();
+  }
+
+  // Show/hide NeedsDetail configuration based on enabled state
+  const needsDetailConfigDiv = document.getElementById("needs-detail-content");
+  if (needsDetailConfigDiv) {
+    needsDetailConfigDiv.style.display = needsDetailRule.enabled ? "block" : "none";
+  }
 }
 
 function saveRuleSettings() {
@@ -4694,11 +4923,17 @@ function saveRuleSettings() {
 
     // Generate detailed feedback about what was saved
     const enabledRules = [];
+    if (currentRules.timeFormat?.enabled) {
+      enabledRules.push("TimeFormat");
+    }
     if (currentRules.nameStandardisation?.enabled) {
       enabledRules.push("Name Standardisation");
     }
     if (currentRules.missingTimeEntries?.enabled) {
       enabledRules.push("Missing Time Entries");
+    }
+    if (currentRules.needsDetail?.enabled) {
+      enabledRules.push("NeedsDetail");
     }
 
     const ruleCount = enabledRules.length;
