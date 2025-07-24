@@ -1023,6 +1023,95 @@
                       </div>
                     </div>
                   </div>
+                  
+                  <!-- Travel Rule Section -->
+                  <div class="dropdown-section">
+                    <div class="dropdown-header" data-target="travel-content">
+                      <div style="display: flex; align-items: center; gap: 8px">
+                        <input
+                          type="checkbox"
+                          id="travel-enabled"
+                          class="ms-Checkbox-input"
+                        />
+                        <h3 class="ms-font-l" style="margin: 0">Travel</h3>
+                      </div>
+                      <span class="dropdown-arrow">▼</span>
+                    </div>
+                    <div
+                      id="travel-content"
+                      class="dropdown-content"
+                      style="display: none"
+                    >
+                      <p class="ms-font-m">
+                        Detect travel-related entries and mark them as non-billable.
+                      </p>
+                      <div
+                        style="
+                          margin-top: 15px;
+                          padding: 15px;
+                          background-color: #f9f9f9;
+                          border-radius: 4px;
+                        "
+                      >
+                        <div class="ms-Grid">
+                          <div class="ms-Grid-row">
+                            <div class="ms-Grid-col ms-sm12">
+                              <label class="ms-Label ms-font-s">Travel Keywords (comma-separated):</label>
+                              <input
+                                id="travel-keywords"
+                                type="text"
+                                class="ms-TextField-field"
+                                value="travel, travelling, drive, driving, airport, flight, hotel, accommodation, train, taxi, uber, journey, commute, transport"
+                                style="width: 100%; margin-top: 5px"
+                              />
+                              <p class="ms-font-xs" style="color: #666; margin-top: 5px">
+                                Words that indicate travel-related activities
+                              </p>
+                            </div>
+                          </div>
+                          <div class="ms-Grid-row" style="margin-top: 15px">
+                            <div class="ms-Grid-col ms-sm6">
+                              <label class="ms-Label ms-font-s">Charge Column Value:</label>
+                              <input
+                                id="travel-charge-value"
+                                type="text"
+                                class="ms-TextField-field"
+                                value="N"
+                                style="width: 60px; margin-top: 5px"
+                              />
+                            </div>
+                            <div class="ms-Grid-col ms-sm6">
+                              <label class="ms-Label ms-font-s">Note Text:</label>
+                              <input
+                                id="travel-note-text"
+                                type="text"
+                                class="ms-TextField-field"
+                                value="NonBillable - Travel"
+                                style="width: 100%; margin-top: 5px"
+                              />
+                            </div>
+                          </div>
+                          <div class="ms-Grid-row" style="margin-top: 15px">
+                            <div class="ms-Grid-col ms-sm6">
+                              <input
+                                type="checkbox"
+                                id="travel-case-sensitive"
+                                class="ms-Checkbox-input"
+                              />
+                              <label class="ms-Label ms-font-s" style="margin-left: 8px">Case sensitive matching</label>
+                            </div>
+                            <div class="ms-Grid-col ms-sm6">
+                              <p class="ms-font-s" style="color: #666;">
+                                <strong>Actions taken:</strong><br/>
+                                • Set Charge column to specified value<br/>
+                                • Add travel note to Notes column
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
                   <!-- Save Rule Settings Button -->
                   <hr style="margin: 30px 0" />

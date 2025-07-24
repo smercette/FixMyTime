@@ -78,6 +78,7 @@ The add-in now includes:
 - **Name Standardisation Rule**: Automatically expands first names to full names based on Fee Earners list
 - **Notes Column**: Tracks which rules have been applied to each row (e.g., "Name Standardised")
 - **Undo Functionality**: Allows reverting Name Standardisation rule applications
+- **Travel Rule**: Detects travel-related keywords in narratives and sets Charge to "N" with "NonBillable - Travel" note
 
 ### Testing
 No test framework is currently configured. Consider adding Jest or Mocha for unit tests when implementing features.
@@ -96,6 +97,10 @@ No test framework is currently configured. Consider adding Jest or Mocha for uni
 - Data in the following columns should NEVER be changed by the add in: 'Name' 'Date' 'Role' 'Rate'
 - The data in the Narrative and Time / Original Narrative and Original Time columns should also not be changed
 - Any changes that are made by Rules should be done in the Amended Narrative and/or Amended Time columns respectively
+
+### Column Naming After Formatting
+- After formatting is applied, original Time and Narrative columns get renamed to "Original Time" and "Original Narrative"
+- Rules must account for this renaming and look for "Original Narrative" first, then fallback to "Narrative"
 
 ## Rules Management
 
@@ -135,3 +140,11 @@ No test framework is currently configured. Consider adding Jest or Mocha for uni
 
 ### Matter Profile Management
 - Don't delete matter profiles without checking with me first.
+
+## Formatting Notes
+
+- Remember that, after Formatting has been applied, there will be no Time or Narrative column (the original Time and Narrative columns get renamed as Original Time and Original Narrative).
+
+## Rules Execution Guidelines
+
+- Make sure rules get applied properly whether they are applied before or after formatting is applied.

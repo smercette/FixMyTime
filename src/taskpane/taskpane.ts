@@ -104,6 +104,17 @@ Office.onReady((info) => {
         }
       };
     }
+    
+    // Travel rule toggle
+    const travelToggle = document.getElementById("travel-enabled") as HTMLInputElement;
+    if (travelToggle) {
+      travelToggle.onchange = () => {
+        const configDiv = document.getElementById("travel-content");
+        if (configDiv) {
+          configDiv.style.display = travelToggle.checked ? "block" : "none";
+        }
+      };
+    }
 
     // Make functions available globally for onclick handlers
     (window as any).removeFeeEarnerRow = removeFeeEarnerRow;
@@ -1296,11 +1307,20 @@ interface NeedsDetailRule {
   minWordCount: number; // minimum number of words required in narrative
 }
 
+interface TravelRule {
+  enabled: boolean;
+  keywords: string[]; // travel-related keywords to detect
+  caseSensitive: boolean; // whether keyword matching is case sensitive
+  chargeValue: string; // value to set in Charge column (typically "N")
+  noteText: string; // note to add to Notes column
+}
+
 interface RulesConfig {
   timeFormat: TimeFormatRule;
   nameStandardisation: NameStandardisationRule;
   missingTimeEntries: MissingTimeEntriesRule;
   needsDetail: NeedsDetailRule;
+  travel: TravelRule;
 }
 
 // Built-in nickname database
@@ -3097,6 +3117,19 @@ async function applyAllRules() {
         return;
       }
     }
+    
+    // Apply Travel Rule if enabled
+    if (currentProfile.rules.travel?.enabled) {
+      showMessage("Applying Travel rule...", "info");
+      const result = await applyTravelRuleWithResult();
+      if (result.success) {
+        appliedRules.push("Travel");
+        totalUpdatedRows += result.updatedRows;
+      } else if (result.error) {
+        showMessage(`Travel failed: ${result.error}`, "error");
+        return;
+      }
+    }
 
     // Show final result and re-apply formatting
     if (appliedRules.length > 0) {
@@ -3501,6 +3534,115 @@ async function applyNameStandardisationRuleWithResult(): Promise<{
     const updatedCount = await applyNameStandardisationToWorksheetWithUndo();
     return { success: true, updatedRows: updatedCount };
   } catch (error) {
+    return { success: false, updatedRows: 0, error: error.message };
+  }
+}
+
+// Travel Rule implementation
+async function applyTravelRuleWithResult(): Promise<{
+  success: boolean;
+  updatedRows: number;
+  error?: string;
+}> {
+  try {
+    // Get current matter and its rules
+    const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+    if (!selectedMatter) {
+      return { success: false, updatedRows: 0, error: "No matter selected" };
+    }
+
+    const profiles = getMatterProfiles();
+    const currentProfile = profiles.find((p) => p.name === selectedMatter);
+    if (!currentProfile || !currentProfile.rules || !currentProfile.rules.travel) {
+      return { success: false, updatedRows: 0, error: "Travel rule not found in profile" };
+    }
+
+    const travelRule = currentProfile.rules.travel;
+    if (!travelRule.enabled) {
+      return { success: false, updatedRows: 0, error: "Travel rule is disabled" };
+    }
+
+    return await Excel.run(async (context) => {
+      const worksheet = context.workbook.worksheets.getActiveWorksheet();
+      const usedRange = worksheet.getUsedRange();
+      usedRange.load(["values", "rowCount", "columnCount"]);
+      await context.sync();
+
+      if (!usedRange) {
+        return { success: false, updatedRows: 0, error: "No data found in worksheet" };
+      }
+
+      const values = usedRange.values;
+      const headers = values[0].map((h) => h.toString().toLowerCase());
+
+      // Find required columns - look for Original Narrative first (after formatting), then fallback to Narrative
+      let narrativeCol = headers.findIndex(h => h.includes("original") && h.includes("narrative"));
+      if (narrativeCol === -1) {
+        // Fallback to regular narrative column if original doesn't exist
+        narrativeCol = headers.findIndex(h => 
+          h.includes("narrative") && !h.includes("amended") && !h.includes("original")
+        );
+      }
+      const chargeCol = headers.findIndex(h => h.includes("charge"));
+      const notesCol = headers.findIndex(h => h.includes("notes"));
+
+      if (narrativeCol === -1) {
+        const availableHeaders = headers.join(", ");
+        return { success: false, updatedRows: 0, error: `Narrative column not found. Available columns: ${availableHeaders}` };
+      }
+      if (chargeCol === -1) {
+        const availableHeaders = headers.join(", ");
+        return { success: false, updatedRows: 0, error: `Charge column not found. Available columns: ${availableHeaders}` };
+      }
+      if (notesCol === -1) {
+        const availableHeaders = headers.join(", ");
+        return { success: false, updatedRows: 0, error: `Notes column not found. Available columns: ${availableHeaders}` };
+      }
+
+      let updatedRows = 0;
+      
+      // Debug info about which columns were found
+      addDebugInfo(`Travel Rule: Using narrative column "${headers[narrativeCol]}" at index ${narrativeCol}`);
+      addDebugInfo(`Travel Rule: Using charge column "${headers[chargeCol]}" at index ${chargeCol}`);
+      addDebugInfo(`Travel Rule: Using notes column "${headers[notesCol]}" at index ${notesCol}`);
+
+      // Process each row (skip header)
+      for (let i = 1; i < values.length; i++) {
+        const narrative = (values[i][narrativeCol] || "").toString();
+        
+        if (!narrative) continue;
+
+        // Check if narrative contains any travel keywords
+        const containsTravelKeyword = travelRule.keywords.some(keyword => {
+          const searchText = travelRule.caseSensitive ? narrative : narrative.toLowerCase();
+          const searchKeyword = travelRule.caseSensitive ? keyword : keyword.toLowerCase();
+          return searchText.includes(searchKeyword);
+        });
+
+        if (containsTravelKeyword) {
+          // Update Charge column
+          const chargeCell = worksheet.getCell(i, chargeCol);
+          chargeCell.values = [[travelRule.chargeValue]];
+
+          // Update Notes column
+          const currentNotes = (values[i][notesCol] || "").toString();
+          const notesCell = worksheet.getCell(i, notesCol);
+          
+          // Add travel note if not already present
+          if (!currentNotes.includes(travelRule.noteText)) {
+            const newNotes = currentNotes ? `${currentNotes}; ${travelRule.noteText}` : travelRule.noteText;
+            notesCell.values = [[newNotes]];
+          }
+
+          updatedRows++;
+        }
+      }
+
+      await context.sync();
+      return { success: true, updatedRows };
+    });
+  } catch (error) {
+    console.error("Error applying Travel rule:", error);
     return { success: false, updatedRows: 0, error: error.message };
   }
 }
@@ -4591,6 +4733,13 @@ function getDefaultRules(): RulesConfig {
       enabled: false,
       minWordCount: 3,
     },
+    travel: {
+      enabled: false,
+      keywords: ["travel", "travelling", "drive", "driving", "airport", "flight", "hotel", "accommodation", "train", "taxi", "uber", "journey", "commute", "transport"],
+      caseSensitive: false,
+      chargeValue: "N",
+      noteText: "NonBillable - Travel",
+    },
   };
 }
 
@@ -4653,6 +4802,19 @@ function getCurrentRules(): RulesConfig {
         (document.getElementById("min-word-count") as HTMLInputElement)?.value || "3",
         10
       ),
+    },
+    travel: {
+      enabled: (document.getElementById("travel-enabled") as HTMLInputElement)?.checked || false,
+      keywords: (
+        (document.getElementById("travel-keywords") as HTMLInputElement)?.value ||
+        "travel,travelling,drive,driving,airport,flight,hotel,accommodation,train,taxi,uber,journey,commute,transport"
+      )
+        .split(",")
+        .map((keyword) => keyword.trim())
+        .filter((keyword) => keyword.length > 0),
+      caseSensitive: (document.getElementById("travel-case-sensitive") as HTMLInputElement)?.checked || false,
+      chargeValue: (document.getElementById("travel-charge-value") as HTMLInputElement)?.value || "N",
+      noteText: (document.getElementById("travel-note-text") as HTMLInputElement)?.value || "NonBillable - Travel",
     },
   };
 }
@@ -4768,6 +4930,34 @@ function loadRulesConfig(rules: RulesConfig) {
   if (needsDetailConfigDiv) {
     needsDetailConfigDiv.style.display = needsDetailRule.enabled ? "block" : "none";
   }
+  
+  // Load Travel rule settings (with null checks for backward compatibility)
+  const travelRule = rules.travel || getDefaultRules().travel;
+  const travelEnabledEl = document.getElementById("travel-enabled") as HTMLInputElement;
+  if (travelEnabledEl) {
+    travelEnabledEl.checked = travelRule.enabled;
+  }
+  const travelKeywordsEl = document.getElementById("travel-keywords") as HTMLInputElement;
+  if (travelKeywordsEl) {
+    travelKeywordsEl.value = travelRule.keywords.join(", ");
+  }
+  const travelCaseSensitiveEl = document.getElementById("travel-case-sensitive") as HTMLInputElement;
+  if (travelCaseSensitiveEl) {
+    travelCaseSensitiveEl.checked = travelRule.caseSensitive;
+  }
+  const travelChargeValueEl = document.getElementById("travel-charge-value") as HTMLInputElement;
+  if (travelChargeValueEl) {
+    travelChargeValueEl.value = travelRule.chargeValue;
+  }
+  const travelNoteTextEl = document.getElementById("travel-note-text") as HTMLInputElement;
+  if (travelNoteTextEl) {
+    travelNoteTextEl.value = travelRule.noteText;
+  }
+  // Show/hide Travel configuration based on enabled state
+  const travelConfigDiv = document.getElementById("travel-content");
+  if (travelConfigDiv) {
+    travelConfigDiv.style.display = travelRule.enabled ? "block" : "none";
+  }
 }
 
 function saveRuleSettings() {
@@ -4803,6 +4993,9 @@ function saveRuleSettings() {
     }
     if (currentRules.needsDetail?.enabled) {
       enabledRules.push("NeedsDetail");
+    }
+    if (currentRules.travel?.enabled) {
+      enabledRules.push("Travel");
     }
 
     const ruleCount = enabledRules.length;
