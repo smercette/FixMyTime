@@ -1104,6 +1104,88 @@
                     </div>
                   </div>
                   
+                  <!-- Max Daily Hours Rule Section -->
+                  <div class="dropdown-section">
+                    <div class="dropdown-header" data-target="max-daily-hours-content">
+                      <div style="display: flex; align-items: center; gap: 8px">
+                        <input
+                          type="checkbox"
+                          id="max-daily-hours-enabled"
+                          class="ms-Checkbox-input"
+                        />
+                        <h3 class="ms-font-l" style="margin: 0">Max Daily Hours</h3>
+                      </div>
+                      <span class="dropdown-arrow">▼</span>
+                    </div>
+                    <div
+                      id="max-daily-hours-content"
+                      class="dropdown-content"
+                      style="display: none"
+                    >
+                      <p class="ms-font-m">
+                        Check if fee earners exceed daily hour limits and flag all their entries for that date.
+                      </p>
+                      <div
+                        style="
+                          margin-top: 15px;
+                          padding: 15px;
+                          background-color: #f9f9f9;
+                          border-radius: 4px;
+                        "
+                      >
+                        <div class="ms-Grid">
+                          <div class="ms-Grid-row">
+                            <div class="ms-Grid-col ms-sm6">
+                              <label class="ms-Label ms-font-s">Max Hours per Day:</label>
+                              <input
+                                id="max-daily-hours-limit"
+                                type="number"
+                                class="ms-TextField-field"
+                                value="8.0"
+                                min="1"
+                                max="24"
+                                step="0.5"
+                                style="width: 100px; margin-top: 5px"
+                              />
+                              <p class="ms-font-xs" style="color: #666; margin-top: 5px">
+                                Maximum hours a fee earner can work in a single day
+                              </p>
+                            </div>
+                            <div class="ms-Grid-col ms-sm6">
+                              <p class="ms-font-s" style="color: #666;">
+                                <strong>Actions taken:</strong><br/>
+                                • Set Charge column to "Q" for ALL entries on exceeded dates<br/>
+                                • Add "Max Daily Hours Exceeded" note to all flagged entries
+                              </p>
+                            </div>
+                          </div>
+                          <div class="ms-Grid-row" style="margin-top: 15px">
+                            <div class="ms-Grid-col ms-sm6">
+                              <label class="ms-Label ms-font-s">Charge Column Value:</label>
+                              <input
+                                id="max-daily-hours-charge-value"
+                                type="text"
+                                class="ms-TextField-field"
+                                value="Q"
+                                style="width: 60px; margin-top: 5px"
+                              />
+                            </div>
+                            <div class="ms-Grid-col ms-sm6">
+                              <label class="ms-Label ms-font-s">Note Text:</label>
+                              <input
+                                id="max-daily-hours-note-text"
+                                type="text"
+                                class="ms-TextField-field"
+                                value="Max Daily Hours Exceeded"
+                                style="width: 100%; margin-top: 5px"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
                   <!-- Non Chargeable Rule Section -->
                   <div class="dropdown-section">
                     <div class="dropdown-header" data-target="non-chargeable-content">

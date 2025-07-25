@@ -115,6 +115,17 @@ Office.onReady((info) => {
       };
     }
     
+    // Max Daily Hours rule toggle
+    const maxDailyHoursToggle = document.getElementById("max-daily-hours-enabled") as HTMLInputElement;
+    if (maxDailyHoursToggle) {
+      maxDailyHoursToggle.onchange = () => {
+        const configDiv = document.getElementById("max-daily-hours-content");
+        if (configDiv) {
+          configDiv.style.display = maxDailyHoursToggle.checked ? "block" : "none";
+        }
+      };
+    }
+
     // Non Chargeable rule toggle
     const nonChargeableToggle = document.getElementById("non-chargeable-enabled") as HTMLInputElement;
     if (nonChargeableToggle) {
@@ -1376,6 +1387,13 @@ interface TravelRule {
   noteText: string; // note to add to Notes column
 }
 
+interface MaxDailyHoursRule {
+  enabled: boolean;
+  maxHours: number; // configurable daily limit in hours (e.g., 8.0)
+  chargeValue: string; // value to set in Charge column (typically "Q")
+  noteText: string; // note to add (e.g., "Max Daily Hours Exceeded")
+}
+
 interface NonChargeableSubcategory {
   enabled: boolean;
   keywords: string[];
@@ -1399,6 +1417,7 @@ interface RulesConfig {
   missingTimeEntries: MissingTimeEntriesRule;
   needsDetail: NeedsDetailRule;
   travel: TravelRule;
+  maxDailyHours: MaxDailyHoursRule;
   nonChargeable: NonChargeableRule;
 }
 
@@ -3219,6 +3238,19 @@ async function applyAllRules() {
       }
     }
     
+    // Apply Max Daily Hours Rule if enabled
+    if (currentProfile.rules.maxDailyHours?.enabled) {
+      showMessage("Applying Max Daily Hours rule...", "info");
+      const result = await applyMaxDailyHoursRuleWithResult();
+      if (result.success) {
+        appliedRules.push("Max Daily Hours");
+        totalUpdatedRows += result.updatedRows;
+      } else if (result.error) {
+        showMessage(`Max Daily Hours failed: ${result.error}`, "error");
+        return;
+      }
+    }
+    
     // Apply Non Chargeable Rule if enabled
     if (currentProfile.rules.nonChargeable?.enabled) {
       showMessage("Applying Non Chargeable rule...", "info");
@@ -3765,6 +3797,157 @@ async function applyTravelRuleWithResult(): Promise<{
     });
   } catch (error) {
     console.error("Error applying Travel rule:", error);
+    return { success: false, updatedRows: 0, error: error.message };
+  }
+}
+
+// Max Daily Hours Rule implementation
+async function applyMaxDailyHoursRuleWithResult(): Promise<{
+  success: boolean;
+  updatedRows: number;
+  error?: string;
+}> {
+  try {
+    // Get current matter and its rules
+    const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+    if (!selectedMatter) {
+      return { success: false, updatedRows: 0, error: "No matter selected" };
+    }
+
+    const profiles = getMatterProfiles();
+    const currentProfile = profiles.find((p) => p.name === selectedMatter);
+    if (!currentProfile || !currentProfile.rules || !currentProfile.rules.maxDailyHours) {
+      return { success: false, updatedRows: 0, error: "Max Daily Hours rule not found in profile" };
+    }
+
+    const maxDailyHoursRule = currentProfile.rules.maxDailyHours;
+    if (!maxDailyHoursRule.enabled) {
+      return { success: false, updatedRows: 0, error: "Max Daily Hours rule is disabled" };
+    }
+
+    return await Excel.run(async (context) => {
+      const worksheet = context.workbook.worksheets.getActiveWorksheet();
+      const usedRange = worksheet.getUsedRange();
+      usedRange.load(["values", "rowCount", "columnCount"]);
+      await context.sync();
+
+      if (!usedRange) {
+        return { success: false, updatedRows: 0, error: "No data found in worksheet" };
+      }
+
+      const values = usedRange.values;
+      const headers = values[0].map((h) => h.toString().toLowerCase());
+
+      // Find required columns
+      const dateCol = headers.findIndex(h => h.includes("date"));
+      const feeEarnerCol = headers.findIndex(h => h.includes("fee earner") || h.includes("earner"));
+      const timeCol = headers.findIndex(h => h.includes("time") && !h.includes("amended"));
+      let originalTimeCol = headers.findIndex(h => h.includes("original") && h.includes("time"));
+      const chargeCol = headers.findIndex(h => h.includes("charge"));
+      const notesCol = headers.findIndex(h => h.includes("notes"));
+
+      // Use Original Time if available, otherwise Time
+      const actualTimeCol = originalTimeCol !== -1 ? originalTimeCol : timeCol;
+      const timeColumnName = originalTimeCol !== -1 ? "Original Time" : "Time";
+
+      if (dateCol === -1) {
+        return { success: false, updatedRows: 0, error: `Date column not found. Available columns: ${headers.join(", ")}` };
+      }
+      if (feeEarnerCol === -1) {
+        return { success: false, updatedRows: 0, error: `Fee Earner column not found. Available columns: ${headers.join(", ")}` };
+      }
+      if (actualTimeCol === -1) {
+        return { success: false, updatedRows: 0, error: `Time column not found. Available columns: ${headers.join(", ")}` };
+      }
+      if (chargeCol === -1) {
+        return { success: false, updatedRows: 0, error: `Charge column not found. Available columns: ${headers.join(", ")}` };
+      }
+      if (notesCol === -1) {
+        return { success: false, updatedRows: 0, error: `Notes column not found. Available columns: ${headers.join(", ")}` };
+      }
+
+      // Group entries by fee earner and date
+      const dailyHours = new Map<string, Map<string, {entries: number[], totalMinutes: number}>>();
+      const validRows: number[] = [];
+
+      // First pass: collect and group all valid entries
+      for (let i = 1; i < values.length; i++) {
+        const rowValues = values[i];
+        
+        // Skip blank or invalid rows using existing helper
+        if (!isValidDataRow(rowValues, headers)) {
+          continue;
+        }
+
+        validRows.push(i);
+        const feeEarner = (rowValues[feeEarnerCol] || "").toString().trim();
+        const dateValue = (rowValues[dateCol] || "").toString().trim();
+        const timeValue = (rowValues[actualTimeCol] || "").toString().trim();
+
+        if (!feeEarner || !dateValue || !timeValue) continue;
+
+        // Parse time to minutes
+        const minutes = parseTimeToMinutes(timeValue);
+        if (minutes === null) continue;
+
+        // Create nested map structure: feeEarner -> date -> {entries, totalMinutes}
+        if (!dailyHours.has(feeEarner)) {
+          dailyHours.set(feeEarner, new Map());
+        }
+        
+        const feeEarnerDates = dailyHours.get(feeEarner);
+        if (!feeEarnerDates.has(dateValue)) {
+          feeEarnerDates.set(dateValue, { entries: [], totalMinutes: 0 });
+        }
+        
+        const dayData = feeEarnerDates.get(dateValue);
+        dayData.entries.push(i);
+        dayData.totalMinutes += minutes;
+      }
+
+      // Find fee earners who exceeded daily limits
+      const exceedingEntries = new Set<number>();
+      const maxMinutes = maxDailyHoursRule.maxHours * 60;
+
+      for (const [feeEarner, feeEarnerDates] of dailyHours) {
+        for (const [date, dayData] of feeEarnerDates) {
+          if (dayData.totalMinutes > maxMinutes) {
+            // Add all entries for this fee earner on this date
+            dayData.entries.forEach(rowIndex => exceedingEntries.add(rowIndex));
+            
+            addDebugInfo(`Max Daily Hours: ${feeEarner} on ${date} worked ${(dayData.totalMinutes / 60).toFixed(2)} hours (limit: ${maxDailyHoursRule.maxHours})`);
+          }
+        }
+      }
+
+      // Second pass: update entries that exceeded limits
+      let updatedRows = 0;
+      for (const rowIndex of exceedingEntries) {
+        // Update Charge column
+        const chargeCell = worksheet.getCell(rowIndex, chargeCol);
+        chargeCell.values = [[maxDailyHoursRule.chargeValue]];
+
+        // Update Notes column
+        const currentNotes = (values[rowIndex][notesCol] || "").toString();
+        const notesCell = worksheet.getCell(rowIndex, notesCol);
+        
+        // Add max daily hours note if not already present
+        if (!currentNotes.includes(maxDailyHoursRule.noteText)) {
+          const newNotes = currentNotes ? `${currentNotes}; ${maxDailyHoursRule.noteText}` : maxDailyHoursRule.noteText;
+          notesCell.values = [[newNotes]];
+        }
+
+        updatedRows++;
+      }
+
+      await context.sync();
+      
+      addDebugInfo(`Max Daily Hours: Updated ${updatedRows} rows across ${exceedingEntries.size} entries that exceeded ${maxDailyHoursRule.maxHours} hour limit`);
+      
+      return { success: true, updatedRows };
+    });
+  } catch (error) {
+    console.error("Error applying Max Daily Hours rule:", error);
     return { success: false, updatedRows: 0, error: error.message };
   }
 }
@@ -5009,6 +5192,12 @@ function getDefaultRules(): RulesConfig {
       chargeValue: "N",
       noteText: "NonBillable - Travel",
     },
+    maxDailyHours: {
+      enabled: false,
+      maxHours: 8.0,
+      chargeValue: "Q",
+      noteText: "Max Daily Hours Exceeded",
+    },
     nonChargeable: {
       enabled: false,
       caseSensitive: false,
@@ -5107,6 +5296,12 @@ function getCurrentRules(): RulesConfig {
       caseSensitive: (document.getElementById("travel-case-sensitive") as HTMLInputElement)?.checked || false,
       chargeValue: (document.getElementById("travel-charge-value") as HTMLInputElement)?.value || "N",
       noteText: (document.getElementById("travel-note-text") as HTMLInputElement)?.value || "NonBillable - Travel",
+    },
+    maxDailyHours: {
+      enabled: (document.getElementById("max-daily-hours-enabled") as HTMLInputElement)?.checked || false,
+      maxHours: parseFloat((document.getElementById("max-daily-hours-limit") as HTMLInputElement)?.value || "8.0"),
+      chargeValue: (document.getElementById("max-daily-hours-charge-value") as HTMLInputElement)?.value || "Q",
+      noteText: (document.getElementById("max-daily-hours-note-text") as HTMLInputElement)?.value || "Max Daily Hours Exceeded",
     },
     nonChargeable: {
       enabled: (document.getElementById("non-chargeable-enabled") as HTMLInputElement)?.checked || false,
@@ -5298,6 +5493,30 @@ function loadRulesConfig(rules: RulesConfig) {
     travelConfigDiv.style.display = travelRule.enabled ? "block" : "none";
   }
   
+  // Load Max Daily Hours rule settings (with null checks for backward compatibility)
+  const maxDailyHoursRule = rules.maxDailyHours || getDefaultRules().maxDailyHours;
+  const maxDailyHoursEnabledEl = document.getElementById("max-daily-hours-enabled") as HTMLInputElement;
+  if (maxDailyHoursEnabledEl) {
+    maxDailyHoursEnabledEl.checked = maxDailyHoursRule.enabled;
+  }
+  const maxDailyHoursLimitEl = document.getElementById("max-daily-hours-limit") as HTMLInputElement;
+  if (maxDailyHoursLimitEl) {
+    maxDailyHoursLimitEl.value = maxDailyHoursRule.maxHours.toString();
+  }
+  const maxDailyHoursChargeValueEl = document.getElementById("max-daily-hours-charge-value") as HTMLInputElement;
+  if (maxDailyHoursChargeValueEl) {
+    maxDailyHoursChargeValueEl.value = maxDailyHoursRule.chargeValue;
+  }
+  const maxDailyHoursNoteTextEl = document.getElementById("max-daily-hours-note-text") as HTMLInputElement;
+  if (maxDailyHoursNoteTextEl) {
+    maxDailyHoursNoteTextEl.value = maxDailyHoursRule.noteText;
+  }
+  // Show/hide Max Daily Hours configuration based on enabled state
+  const maxDailyHoursConfigDiv = document.getElementById("max-daily-hours-content");
+  if (maxDailyHoursConfigDiv) {
+    maxDailyHoursConfigDiv.style.display = maxDailyHoursRule.enabled ? "block" : "none";
+  }
+  
   // Load Non Chargeable rule settings (with null checks for backward compatibility)
   const nonChargeableRule = rules.nonChargeable || getDefaultRules().nonChargeable;
   const nonChargeableEnabledEl = document.getElementById("non-chargeable-enabled") as HTMLInputElement;
@@ -5393,6 +5612,9 @@ function saveRuleSettings() {
     }
     if (currentRules.travel?.enabled) {
       enabledRules.push("Travel");
+    }
+    if (currentRules.maxDailyHours?.enabled) {
+      enabledRules.push("Max Daily Hours");
     }
     if (currentRules.nonChargeable?.enabled) {
       enabledRules.push("Non Chargeable");
