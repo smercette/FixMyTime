@@ -25,8 +25,7 @@ Office.onReady((info) => {
   if (info.host === Office.HostType.Excel) {
     document.getElementById("sideload-msg").style.display = "none";
     document.getElementById("app-body").style.display = "flex";
-    document.getElementById("apply-formatting").onclick = applyFormatting;
-    document.getElementById("apply-all-rules").onclick = applyAllRules;
+    document.getElementById("process-entries").onclick = processEntries;
     // Clear any previous debug info on initialization
     clearDebugInfo();
 
@@ -256,6 +255,33 @@ function collapseNestedRuleDropdowns() {
 }
 
 // Combined formatting function that applies all formatting operations
+async function processEntries() {
+  try {
+    showMessage("Processing entries - applying initial formatting...", "info");
+    
+    // Step 1: Apply initial formatting (creates proper column structure)
+    await formatSpreadsheet();
+    await addColumns();
+    await colorCodeRows();
+
+    showMessage("Processing entries - applying rules...", "info");
+    
+    // Step 2: Apply all enabled rules (this includes its own formatting and success message)
+    await applyAllRules();
+
+    showMessage("Processing entries - applying final formatting...", "info");
+    
+    // Step 3: Apply final formatting pass to ensure everything looks clean
+    await formatSpreadsheet();
+    await colorCodeRows();
+
+    showMessage("Entry processing completed successfully.", "success");
+  } catch (error) {
+    console.error("Error processing entries:", error);
+    showMessage("An error occurred while processing entries: " + error.message, "error");
+  }
+}
+
 async function applyFormatting() {
   try {
     // Execute all three formatting operations in sequence
