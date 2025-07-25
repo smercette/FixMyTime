@@ -79,6 +79,7 @@ The add-in now includes:
 - **Notes Column**: Tracks which rules have been applied to each row (e.g., "Name Standardised")
 - **Undo Functionality**: Allows reverting Name Standardisation rule applications
 - **Travel Rule**: Detects travel-related keywords in narratives and sets Charge to "N" with "NonBillable - Travel" note
+- **Non Chargeable Rule**: Comprehensive rule with 4 subcategories (Clerical/Admin, Audit, Own Error, Research) for detecting and categorizing non-chargeable activities
 
 ### Testing
 No test framework is currently configured. Consider adding Jest or Mocha for unit tests when implementing features.

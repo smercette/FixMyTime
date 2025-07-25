@@ -1112,6 +1112,162 @@
                       </div>
                     </div>
                   </div>
+                  
+                  <!-- Non Chargeable Rule Section -->
+                  <div class="dropdown-section">
+                    <div class="dropdown-header" data-target="non-chargeable-content">
+                      <div style="display: flex; align-items: center; gap: 8px">
+                        <input
+                          type="checkbox"
+                          id="non-chargeable-enabled"
+                          class="ms-Checkbox-input"
+                        />
+                        <h3 class="ms-font-l" style="margin: 0">Non Chargeable</h3>
+                      </div>
+                      <span class="dropdown-arrow">▼</span>
+                    </div>
+                    <div
+                      id="non-chargeable-content"
+                      class="dropdown-content"
+                      style="display: none"
+                    >
+                      <p class="ms-font-m">
+                        Detect non-chargeable activities and mark them appropriately with detailed categorization.
+                      </p>
+                      <div
+                        style="
+                          margin-top: 15px;
+                          padding: 15px;
+                          background-color: #f9f9f9;
+                          border-radius: 4px;
+                        "
+                      >
+                        <div class="ms-Grid">
+                          <!-- Global Settings -->
+                          <div class="ms-Grid-row">
+                            <div class="ms-Grid-col ms-sm6">
+                              <label class="ms-Label ms-font-s">Charge Column Value:</label>
+                              <input
+                                id="non-chargeable-charge-value"
+                                type="text"
+                                class="ms-TextField-field"
+                                value="N"
+                                style="width: 60px; margin-top: 5px"
+                              />
+                            </div>
+                            <div class="ms-Grid-col ms-sm6">
+                              <input
+                                type="checkbox"
+                                id="non-chargeable-case-sensitive"
+                                class="ms-Checkbox-input"
+                              />
+                              <label class="ms-Label ms-font-s" style="margin-left: 8px">Case sensitive matching</label>
+                            </div>
+                          </div>
+
+                          <!-- Clerical/Admin Subcategory -->
+                          <div class="ms-Grid-row" style="margin-top: 20px; border-top: 1px solid #ddd; padding-top: 15px">
+                            <div class="ms-Grid-col ms-sm12">
+                              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px">
+                                <input
+                                  type="checkbox"
+                                  id="clerical-admin-enabled"
+                                  class="ms-Checkbox-input"
+                                />
+                                <h4 class="ms-font-m" style="margin: 0">Clerical/Admin</h4>
+                              </div>
+                              <label class="ms-Label ms-font-s">Keywords (comma-separated):</label>
+                              <input
+                                id="clerical-admin-keywords"
+                                type="text"
+                                class="ms-TextField-field"
+                                value="filing, admin, administration, clerical, photocopying, scanning, organizing, office, paperwork, housekeeping"
+                                style="width: 100%; margin-top: 5px"
+                              />
+                            </div>
+                          </div>
+
+                          <!-- Audit Subcategory -->
+                          <div class="ms-Grid-row" style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 15px">
+                            <div class="ms-Grid-col ms-sm12">
+                              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px">
+                                <input
+                                  type="checkbox"
+                                  id="audit-enabled"
+                                  class="ms-Checkbox-input"
+                                />
+                                <h4 class="ms-font-m" style="margin: 0">Audit</h4>
+                              </div>
+                              <label class="ms-Label ms-font-s">Keywords (comma-separated):</label>
+                              <input
+                                id="audit-keywords"
+                                type="text"
+                                class="ms-TextField-field"
+                                value="audit, auditing, compliance, review, checking, verification, quality control, monitoring"
+                                style="width: 100%; margin-top: 5px"
+                              />
+                            </div>
+                          </div>
+
+                          <!-- Own Error Subcategory -->
+                          <div class="ms-Grid-row" style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 15px">
+                            <div class="ms-Grid-col ms-sm12">
+                              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px">
+                                <input
+                                  type="checkbox"
+                                  id="own-error-enabled"
+                                  class="ms-Checkbox-input"
+                                />
+                                <h4 class="ms-font-m" style="margin: 0">Own Error</h4>
+                              </div>
+                              <label class="ms-Label ms-font-s">Keywords (comma-separated):</label>
+                              <input
+                                id="own-error-keywords"
+                                type="text"
+                                class="ms-TextField-field"
+                                value="mistake, error, correction, fix, redo, revise, amend, rectify, wrong, incorrect"
+                                style="width: 100%; margin-top: 5px"
+                              />
+                            </div>
+                          </div>
+
+                          <!-- Research Subcategory -->
+                          <div class="ms-Grid-row" style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 15px">
+                            <div class="ms-Grid-col ms-sm12">
+                              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px">
+                                <input
+                                  type="checkbox"
+                                  id="research-enabled"
+                                  class="ms-Checkbox-input"
+                                />
+                                <h4 class="ms-font-m" style="margin: 0">Research</h4>
+                              </div>
+                              <label class="ms-Label ms-font-s">Keywords (comma-separated):</label>
+                              <input
+                                id="research-keywords"
+                                type="text"
+                                class="ms-TextField-field"
+                                value="research, investigating, learning, studying, training, education, reading, background, familiarization"
+                                style="width: 100%; margin-top: 5px"
+                              />
+                            </div>
+                          </div>
+
+                          <!-- Info Section -->
+                          <div class="ms-Grid-row" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd">
+                            <div class="ms-Grid-col ms-sm12">
+                              <p class="ms-font-s" style="color: #666;">
+                                <strong>Actions taken:</strong><br/>
+                                • Set Charge column to specified value<br/>
+                                • Add "Non Chargeable - [Category] - [Keyword]" to Notes column<br/>
+                                • Multiple matches will create multiple notes
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
                   <!-- Save Rule Settings Button -->
                   <hr style="margin: 30px 0" />

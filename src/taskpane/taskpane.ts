@@ -115,6 +115,17 @@ Office.onReady((info) => {
         }
       };
     }
+    
+    // Non Chargeable rule toggle
+    const nonChargeableToggle = document.getElementById("non-chargeable-enabled") as HTMLInputElement;
+    if (nonChargeableToggle) {
+      nonChargeableToggle.onchange = () => {
+        const configDiv = document.getElementById("non-chargeable-content");
+        if (configDiv) {
+          configDiv.style.display = nonChargeableToggle.checked ? "block" : "none";
+        }
+      };
+    }
 
     // Make functions available globally for onclick handlers
     (window as any).removeFeeEarnerRow = removeFeeEarnerRow;
@@ -1315,12 +1326,30 @@ interface TravelRule {
   noteText: string; // note to add to Notes column
 }
 
+interface NonChargeableSubcategory {
+  enabled: boolean;
+  keywords: string[];
+}
+
+interface NonChargeableRule {
+  enabled: boolean;
+  caseSensitive: boolean; // whether keyword matching is case sensitive
+  chargeValue: string; // value to set in Charge column (typically "N")
+  subcategories: {
+    clericalAdmin: NonChargeableSubcategory;
+    audit: NonChargeableSubcategory;
+    ownError: NonChargeableSubcategory;
+    research: NonChargeableSubcategory;
+  };
+}
+
 interface RulesConfig {
   timeFormat: TimeFormatRule;
   nameStandardisation: NameStandardisationRule;
   missingTimeEntries: MissingTimeEntriesRule;
   needsDetail: NeedsDetailRule;
   travel: TravelRule;
+  nonChargeable: NonChargeableRule;
 }
 
 // Built-in nickname database
@@ -3130,6 +3159,19 @@ async function applyAllRules() {
         return;
       }
     }
+    
+    // Apply Non Chargeable Rule if enabled
+    if (currentProfile.rules.nonChargeable?.enabled) {
+      showMessage("Applying Non Chargeable rule...", "info");
+      const result = await applyNonChargeableRuleWithResult();
+      if (result.success) {
+        appliedRules.push("Non Chargeable");
+        totalUpdatedRows += result.updatedRows;
+      } else if (result.error) {
+        showMessage(`Non Chargeable failed: ${result.error}`, "error");
+        return;
+      }
+    }
 
     // Show final result and re-apply formatting
     if (appliedRules.length > 0) {
@@ -3643,6 +3685,146 @@ async function applyTravelRuleWithResult(): Promise<{
     });
   } catch (error) {
     console.error("Error applying Travel rule:", error);
+    return { success: false, updatedRows: 0, error: error.message };
+  }
+}
+
+// Non Chargeable Rule implementation
+async function applyNonChargeableRuleWithResult(): Promise<{
+  success: boolean;
+  updatedRows: number;
+  error?: string;
+}> {
+  try {
+    // Get current matter and its rules
+    const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+    if (!selectedMatter) {
+      return { success: false, updatedRows: 0, error: "No matter selected" };
+    }
+
+    const profiles = getMatterProfiles();
+    const currentProfile = profiles.find((p) => p.name === selectedMatter);
+    if (!currentProfile || !currentProfile.rules || !currentProfile.rules.nonChargeable) {
+      return { success: false, updatedRows: 0, error: "Non Chargeable rule not found in profile" };
+    }
+
+    const nonChargeableRule = currentProfile.rules.nonChargeable;
+    if (!nonChargeableRule.enabled) {
+      return { success: false, updatedRows: 0, error: "Non Chargeable rule is disabled" };
+    }
+
+    return await Excel.run(async (context) => {
+      const worksheet = context.workbook.worksheets.getActiveWorksheet();
+      const usedRange = worksheet.getUsedRange();
+      usedRange.load(["values", "rowCount", "columnCount"]);
+      await context.sync();
+
+      if (!usedRange) {
+        return { success: false, updatedRows: 0, error: "No data found in worksheet" };
+      }
+
+      const values = usedRange.values;
+      const headers = values[0].map((h) => h.toString().toLowerCase());
+
+      // Find required columns - look for Original Narrative first (after formatting), then fallback to Narrative
+      let narrativeCol = headers.findIndex(h => h.includes("original") && h.includes("narrative"));
+      if (narrativeCol === -1) {
+        // Fallback to regular narrative column if original doesn't exist
+        narrativeCol = headers.findIndex(h => 
+          h.includes("narrative") && !h.includes("amended") && !h.includes("original")
+        );
+      }
+      const chargeCol = headers.findIndex(h => h.includes("charge"));
+      const notesCol = headers.findIndex(h => h.includes("notes"));
+
+      if (narrativeCol === -1) {
+        const availableHeaders = headers.join(", ");
+        return { success: false, updatedRows: 0, error: `Narrative column not found. Available columns: ${availableHeaders}` };
+      }
+      if (chargeCol === -1) {
+        const availableHeaders = headers.join(", ");
+        return { success: false, updatedRows: 0, error: `Charge column not found. Available columns: ${availableHeaders}` };
+      }
+      if (notesCol === -1) {
+        const availableHeaders = headers.join(", ");
+        return { success: false, updatedRows: 0, error: `Notes column not found. Available columns: ${availableHeaders}` };
+      }
+
+      let updatedRows = 0;
+      
+      // Debug info about which columns were found
+      addDebugInfo(`Non Chargeable Rule: Using narrative column "${headers[narrativeCol]}" at index ${narrativeCol}`);
+      addDebugInfo(`Non Chargeable Rule: Using charge column "${headers[chargeCol]}" at index ${chargeCol}`);
+      addDebugInfo(`Non Chargeable Rule: Using notes column "${headers[notesCol]}" at index ${notesCol}`);
+
+      // Get all enabled subcategories
+      const enabledSubcategories = [];
+      if (nonChargeableRule.subcategories.clericalAdmin.enabled) {
+        enabledSubcategories.push({ name: "Clerical/Admin", config: nonChargeableRule.subcategories.clericalAdmin });
+      }
+      if (nonChargeableRule.subcategories.audit.enabled) {
+        enabledSubcategories.push({ name: "Audit", config: nonChargeableRule.subcategories.audit });
+      }
+      if (nonChargeableRule.subcategories.ownError.enabled) {
+        enabledSubcategories.push({ name: "Own Error", config: nonChargeableRule.subcategories.ownError });
+      }
+      if (nonChargeableRule.subcategories.research.enabled) {
+        enabledSubcategories.push({ name: "Research", config: nonChargeableRule.subcategories.research });
+      }
+
+      if (enabledSubcategories.length === 0) {
+        return { success: false, updatedRows: 0, error: "No subcategories are enabled" };
+      }
+
+      // Process each row (skip header)
+      for (let i = 1; i < values.length; i++) {
+        const narrative = (values[i][narrativeCol] || "").toString();
+        
+        if (!narrative) continue;
+
+        const matchedKeywords: { category: string; keyword: string }[] = [];
+
+        // Check each enabled subcategory
+        for (const subcategory of enabledSubcategories) {
+          for (const keyword of subcategory.config.keywords) {
+            const searchText = nonChargeableRule.caseSensitive ? narrative : narrative.toLowerCase();
+            const searchKeyword = nonChargeableRule.caseSensitive ? keyword : keyword.toLowerCase();
+            
+            if (searchText.includes(searchKeyword)) {
+              matchedKeywords.push({ category: subcategory.name, keyword: keyword });
+            }
+          }
+        }
+
+        if (matchedKeywords.length > 0) {
+          // Update Charge column
+          const chargeCell = worksheet.getCell(i, chargeCol);
+          chargeCell.values = [[nonChargeableRule.chargeValue]];
+
+          // Update Notes column with all matched keywords
+          const currentNotes = (values[i][notesCol] || "").toString();
+          const notesCell = worksheet.getCell(i, notesCol);
+          
+          // Create note text for each matched keyword: "Non Chargeable - [Category] - [Keyword]"
+          const newNotes = matchedKeywords.map(match => 
+            `Non Chargeable - ${match.category} - ${match.keyword}`
+          );
+          
+          // Combine with existing notes
+          const combinedNotes = currentNotes 
+            ? `${currentNotes}; ${newNotes.join("; ")}`
+            : newNotes.join("; ");
+          
+          notesCell.values = [[combinedNotes]];
+          updatedRows++;
+        }
+      }
+
+      await context.sync();
+      return { success: true, updatedRows };
+    });
+  } catch (error) {
+    console.error("Error applying Non Chargeable rule:", error);
     return { success: false, updatedRows: 0, error: error.message };
   }
 }
@@ -4740,6 +4922,29 @@ function getDefaultRules(): RulesConfig {
       chargeValue: "N",
       noteText: "NonBillable - Travel",
     },
+    nonChargeable: {
+      enabled: false,
+      caseSensitive: false,
+      chargeValue: "N",
+      subcategories: {
+        clericalAdmin: {
+          enabled: false,
+          keywords: ["filing", "admin", "administration", "clerical", "photocopying", "scanning", "organizing", "office", "paperwork", "housekeeping"],
+        },
+        audit: {
+          enabled: false,
+          keywords: ["audit", "auditing", "compliance", "review", "checking", "verification", "quality control", "monitoring"],
+        },
+        ownError: {
+          enabled: false,
+          keywords: ["mistake", "error", "correction", "fix", "redo", "revise", "amend", "rectify", "wrong", "incorrect"],
+        },
+        research: {
+          enabled: false,  
+          keywords: ["research", "investigating", "learning", "studying", "training", "education", "reading", "background", "familiarization"],
+        },
+      },
+    },
   };
 }
 
@@ -4815,6 +5020,53 @@ function getCurrentRules(): RulesConfig {
       caseSensitive: (document.getElementById("travel-case-sensitive") as HTMLInputElement)?.checked || false,
       chargeValue: (document.getElementById("travel-charge-value") as HTMLInputElement)?.value || "N",
       noteText: (document.getElementById("travel-note-text") as HTMLInputElement)?.value || "NonBillable - Travel",
+    },
+    nonChargeable: {
+      enabled: (document.getElementById("non-chargeable-enabled") as HTMLInputElement)?.checked || false,
+      caseSensitive: (document.getElementById("non-chargeable-case-sensitive") as HTMLInputElement)?.checked || false,
+      chargeValue: (document.getElementById("non-chargeable-charge-value") as HTMLInputElement)?.value || "N",
+      subcategories: {
+        clericalAdmin: {
+          enabled: (document.getElementById("clerical-admin-enabled") as HTMLInputElement)?.checked || false,
+          keywords: (
+            (document.getElementById("clerical-admin-keywords") as HTMLInputElement)?.value ||
+            "filing,admin,administration,clerical,photocopying,scanning,organizing,office,paperwork,housekeeping"
+          )
+            .split(",")
+            .map((keyword) => keyword.trim())
+            .filter((keyword) => keyword.length > 0),
+        },
+        audit: {
+          enabled: (document.getElementById("audit-enabled") as HTMLInputElement)?.checked || false,
+          keywords: (
+            (document.getElementById("audit-keywords") as HTMLInputElement)?.value ||
+            "audit,auditing,compliance,review,checking,verification,quality control,monitoring"
+          )
+            .split(",")
+            .map((keyword) => keyword.trim())
+            .filter((keyword) => keyword.length > 0),
+        },
+        ownError: {
+          enabled: (document.getElementById("own-error-enabled") as HTMLInputElement)?.checked || false,
+          keywords: (
+            (document.getElementById("own-error-keywords") as HTMLInputElement)?.value ||
+            "mistake,error,correction,fix,redo,revise,amend,rectify,wrong,incorrect"
+          )
+            .split(",")
+            .map((keyword) => keyword.trim())
+            .filter((keyword) => keyword.length > 0),
+        },
+        research: {
+          enabled: (document.getElementById("research-enabled") as HTMLInputElement)?.checked || false,
+          keywords: (
+            (document.getElementById("research-keywords") as HTMLInputElement)?.value ||
+            "research,investigating,learning,studying,training,education,reading,background,familiarization"
+          )
+            .split(",")
+            .map((keyword) => keyword.trim())
+            .filter((keyword) => keyword.length > 0),
+        },
+      },
     },
   };
 }
@@ -4958,6 +5210,64 @@ function loadRulesConfig(rules: RulesConfig) {
   if (travelConfigDiv) {
     travelConfigDiv.style.display = travelRule.enabled ? "block" : "none";
   }
+  
+  // Load Non Chargeable rule settings (with null checks for backward compatibility)
+  const nonChargeableRule = rules.nonChargeable || getDefaultRules().nonChargeable;
+  const nonChargeableEnabledEl = document.getElementById("non-chargeable-enabled") as HTMLInputElement;
+  if (nonChargeableEnabledEl) {
+    nonChargeableEnabledEl.checked = nonChargeableRule.enabled;
+  }
+  const nonChargeableCaseSensitiveEl = document.getElementById("non-chargeable-case-sensitive") as HTMLInputElement;
+  if (nonChargeableCaseSensitiveEl) {
+    nonChargeableCaseSensitiveEl.checked = nonChargeableRule.caseSensitive;
+  }
+  const nonChargeableChargeValueEl = document.getElementById("non-chargeable-charge-value") as HTMLInputElement;
+  if (nonChargeableChargeValueEl) {
+    nonChargeableChargeValueEl.value = nonChargeableRule.chargeValue;
+  }
+  
+  // Load subcategory settings
+  const clericalAdminEnabledEl = document.getElementById("clerical-admin-enabled") as HTMLInputElement;
+  if (clericalAdminEnabledEl) {
+    clericalAdminEnabledEl.checked = nonChargeableRule.subcategories.clericalAdmin.enabled;
+  }
+  const clericalAdminKeywordsEl = document.getElementById("clerical-admin-keywords") as HTMLInputElement;
+  if (clericalAdminKeywordsEl) {
+    clericalAdminKeywordsEl.value = nonChargeableRule.subcategories.clericalAdmin.keywords.join(", ");
+  }
+  
+  const auditEnabledEl = document.getElementById("audit-enabled") as HTMLInputElement;
+  if (auditEnabledEl) {
+    auditEnabledEl.checked = nonChargeableRule.subcategories.audit.enabled;
+  }
+  const auditKeywordsEl = document.getElementById("audit-keywords") as HTMLInputElement;
+  if (auditKeywordsEl) {
+    auditKeywordsEl.value = nonChargeableRule.subcategories.audit.keywords.join(", ");
+  }
+  
+  const ownErrorEnabledEl = document.getElementById("own-error-enabled") as HTMLInputElement;
+  if (ownErrorEnabledEl) {
+    ownErrorEnabledEl.checked = nonChargeableRule.subcategories.ownError.enabled;
+  }
+  const ownErrorKeywordsEl = document.getElementById("own-error-keywords") as HTMLInputElement;
+  if (ownErrorKeywordsEl) {
+    ownErrorKeywordsEl.value = nonChargeableRule.subcategories.ownError.keywords.join(", ");
+  }
+  
+  const researchEnabledEl = document.getElementById("research-enabled") as HTMLInputElement;
+  if (researchEnabledEl) {
+    researchEnabledEl.checked = nonChargeableRule.subcategories.research.enabled;
+  }
+  const researchKeywordsEl = document.getElementById("research-keywords") as HTMLInputElement;
+  if (researchKeywordsEl) {
+    researchKeywordsEl.value = nonChargeableRule.subcategories.research.keywords.join(", ");
+  }
+  
+  // Show/hide Non Chargeable configuration based on enabled state
+  const nonChargeableConfigDiv = document.getElementById("non-chargeable-content");
+  if (nonChargeableConfigDiv) {
+    nonChargeableConfigDiv.style.display = nonChargeableRule.enabled ? "block" : "none";
+  }
 }
 
 function saveRuleSettings() {
@@ -4996,6 +5306,9 @@ function saveRuleSettings() {
     }
     if (currentRules.travel?.enabled) {
       enabledRules.push("Travel");
+    }
+    if (currentRules.nonChargeable?.enabled) {
+      enabledRules.push("Non Chargeable");
     }
 
     const ruleCount = enabledRules.length;
