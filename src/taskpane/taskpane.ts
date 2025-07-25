@@ -728,6 +728,30 @@ function findNotesColumn(headerRow: any[]): number {
   return -1;
 }
 
+// Helper function to check if a row contains valid data that should be processed by rules
+function isValidDataRow(rowValues: any[], headers: any[]): boolean {
+  // Find date column index
+  const dateIndex = headers.findIndex(h => {
+    const headerText = h?.toString().toLowerCase() || "";
+    return headerText === "date" || headerText.includes("date");
+  });
+  
+  // Find fee earner column index
+  const feeEarnerIndex = headers.findIndex(h => {
+    const headerText = h?.toString().toLowerCase() || "";
+    return headerText === "fee earner" || headerText === "name" || 
+           headerText.includes("fee earner") || headerText.includes("earner");
+  });
+  
+  // Check if both date and fee earner have actual values
+  const hasDate = dateIndex >= 0 && rowValues[dateIndex] && 
+                  rowValues[dateIndex].toString().trim().length > 0;
+  const hasFeeEarner = feeEarnerIndex >= 0 && rowValues[feeEarnerIndex] && 
+                       rowValues[feeEarnerIndex].toString().trim().length > 0;
+  
+  return hasDate && hasFeeEarner;
+}
+
 async function createNotesColumn(worksheet: Excel.Worksheet, insertAfterColumn: number) {
   // Insert new column
   const insertColumn = worksheet.getCell(0, insertAfterColumn + 1).getEntireColumn();
@@ -2251,6 +2275,15 @@ function applyNameStandardisationRule(
   const processedData = [...worksheetData];
 
   processedData.forEach((row, rowIndex) => {
+    // Skip blank or invalid rows (must have Date and Fee Earner)
+    const hasDate = (row.Date || row.date) && row.Date?.toString().trim().length > 0;
+    const hasFeeEarner = (row["Fee Earner"] || row.Name || row["Fee earner"] || row.name) && 
+                         (row["Fee Earner"] || row.Name || row["Fee earner"] || row.name)?.toString().trim().length > 0;
+    
+    if (!hasDate || !hasFeeEarner) {
+      return;
+    }
+    
     // Find the source narrative column (Original Narrative or Narrative)
     const sourceNarrativeKey = findSourceNarrativeColumn(row);
     if (!sourceNarrativeKey) return;
@@ -3399,7 +3432,14 @@ async function applyNeedsDetailRuleWithResult(): Promise<{
       
       // Process each data row
       for (let rowIndex = 1; rowIndex < values.length; rowIndex++) {
-        const narrativeValue = values[rowIndex][narrativeIndex];
+        const rowValues = values[rowIndex];
+        
+        // Skip blank or invalid rows (must have Date and Fee Earner)
+        if (!isValidDataRow(rowValues, headers)) {
+          continue;
+        }
+        
+        const narrativeValue = rowValues[narrativeIndex];
         if (!narrativeValue) continue;
         
         const narrativeText = narrativeValue.toString().trim();
@@ -3546,7 +3586,14 @@ async function applyTimeFormatRuleWithResult(): Promise<{
       
       // Process each data row
       for (let rowIndex = 1; rowIndex < values.length; rowIndex++) {
-        const timeValue = values[rowIndex][timeIndex];
+        const rowValues = values[rowIndex];
+        
+        // Skip blank or invalid rows (must have Date and Fee Earner)
+        if (!isValidDataRow(rowValues, headers)) {
+          continue;
+        }
+        
+        const timeValue = rowValues[timeIndex];
         if (!timeValue) continue;
         
         const timeString = timeValue.toString();
@@ -3676,7 +3723,14 @@ async function applyTravelRuleWithResult(): Promise<{
 
       // Process each row (skip header)
       for (let i = 1; i < values.length; i++) {
-        const narrative = (values[i][narrativeCol] || "").toString();
+        const rowValues = values[i];
+        
+        // Skip blank or invalid rows (must have Date and Fee Earner)
+        if (!isValidDataRow(rowValues, headers)) {
+          continue;
+        }
+        
+        const narrative = (rowValues[narrativeCol] || "").toString();
         
         if (!narrative) continue;
 
@@ -3804,7 +3858,14 @@ async function applyNonChargeableRuleWithResult(): Promise<{
 
       // Process each row (skip header)
       for (let i = 1; i < values.length; i++) {
-        const narrative = (values[i][narrativeCol] || "").toString();
+        const rowValues = values[i];
+        
+        // Skip blank or invalid rows (must have Date and Fee Earner)
+        if (!isValidDataRow(rowValues, headers)) {
+          continue;
+        }
+        
+        const narrative = (rowValues[narrativeCol] || "").toString();
         
         if (!narrative) continue;
 
