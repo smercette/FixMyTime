@@ -149,3 +149,10 @@ No test framework is currently configured. Consider adding Jest or Mocha for uni
 ## Rules Execution Guidelines
 
 - Make sure rules get applied properly whether they are applied before or after formatting is applied.
+
+## Compacting Considerations
+
+### Memory Compaction
+- When compacting, suggest new memories that can help improve the add-in's functionality
+- Focus on identifying potential improvements in rules, user interface, or data processing
+- Consider adding memories that capture insights from recent development or usage experiences
