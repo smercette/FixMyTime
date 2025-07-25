@@ -22,6 +22,8 @@ interface UndoSnapshot {
 let lastUndoSnapshot: UndoSnapshot | null = null;
 
 Office.onReady((info) => {
+  try {
+    console.log("Office.onReady called, host:", info.host);
   if (info.host === Office.HostType.Excel) {
     document.getElementById("sideload-msg").style.display = "none";
     document.getElementById("app-body").style.display = "flex";
@@ -29,13 +31,17 @@ Office.onReady((info) => {
     document.getElementById("apply-all-rules").onclick = applyAllRules;
     // Clear any previous debug info on initialization
     clearDebugInfo();
+    
+    // Test debug functionality
+    console.log("FixMyTime add-in Office.onReady called");
+    addDebugInfo("FixMyTime add-in loaded successfully");
 
     // Matter profile functionality
     document.getElementById("save-matter").onclick = saveMatterProfile;
     document.getElementById("delete-matter").onclick = deleteMatterProfile;
     document.getElementById("save-current-settings").onclick = saveCurrentSettings;
     document.getElementById("save-matter-profile").onclick = saveMatterProfileFromDropdown;
-    
+
     // Debug: Add a function to check localStorage
     (window as any).debugMatterProfiles = () => {
       const profiles = getMatterProfiles();
@@ -54,9 +60,9 @@ Office.onReady((info) => {
     document.getElementById("save-rule-settings").onclick = saveRuleSettings;
     document.getElementById("undo-name-rules").onclick = undoNameStandardisation;
 
-    // Nickname database functionality
-    document.getElementById("add-nickname").onclick = addNicknameEntry;
-    document.getElementById("reset-nicknames").onclick = resetNicknamesToDefault;
+    // Nickname database functionality (temporarily commented out due to missing functions)
+    // document.getElementById("add-nickname").onclick = addNicknameEntry;
+    // document.getElementById("reset-nicknames").onclick = resetNicknamesToDefault;
 
     // Nickname database toggle
     const nicknameToggle = document.getElementById("use-nickname-database") as HTMLInputElement;
@@ -104,7 +110,7 @@ Office.onReady((info) => {
         }
       };
     }
-    
+
     // Travel rule toggle
     const travelToggle = document.getElementById("travel-enabled") as HTMLInputElement;
     if (travelToggle) {
@@ -115,9 +121,11 @@ Office.onReady((info) => {
         }
       };
     }
-    
+
     // Non Chargeable rule toggle
-    const nonChargeableToggle = document.getElementById("non-chargeable-enabled") as HTMLInputElement;
+    const nonChargeableToggle = document.getElementById(
+      "non-chargeable-enabled"
+    ) as HTMLInputElement;
     if (nonChargeableToggle) {
       nonChargeableToggle.onchange = () => {
         const configDiv = document.getElementById("non-chargeable-content");
@@ -127,976 +135,484 @@ Office.onReady((info) => {
       };
     }
 
+    // Max Daily Hours rule toggle
+    const maxDailyHoursToggle = document.getElementById(
+      "max-daily-hours-enabled"
+    ) as HTMLInputElement;
+    if (maxDailyHoursToggle) {
+      maxDailyHoursToggle.onchange = () => {
+        const configDiv = document.getElementById("max-daily-hours-content");
+        if (configDiv) {
+          configDiv.style.display = maxDailyHoursToggle.checked ? "block" : "none";
+        }
+      };
+    }
+
     // Make functions available globally for onclick handlers
     (window as any).removeFeeEarnerRow = removeFeeEarnerRow;
-    (window as any).removeNicknameEntry = removeNicknameEntry;
-
+    // (window as any).removeNicknameEntry = removeNicknameEntry; // temporarily commented out
     // Handle matter selection from dropdown
     const matterSelect = document.getElementById("matter-select") as HTMLSelectElement;
-    matterSelect.onchange = () => {
-      addDebugInfo(`Matter select changed to: "${matterSelect.value}"`);
-      if (matterSelect.value === "__new__") {
-        addDebugInfo("Add New Matter selected - showing new matter section");
-        // Show new matter creation section and switch to Settings tab
-        document.getElementById("new-matter-section").style.display = "block";
-        switchToSettingsTab();
-        // Hide Quick Actions section
-        document.getElementById("quick-actions-section").style.display = "none";
-      } else if (matterSelect.value) {
-        // Load existing matter profile
-        loadMatterProfile();
-        // Hide new matter creation section
-        document.getElementById("new-matter-section").style.display = "none";
-      } else {
-        // Hide Quick Actions section when no matter is selected
-        document.getElementById("quick-actions-section").style.display = "none";
-        // Hide new matter creation section
-        document.getElementById("new-matter-section").style.display = "none";
-      }
-    };
+    matterSelect.onchange = handleMatterSelect;
 
-    // Toggle prepopulation rules visibility
-    const prepopulateCheckbox = document.getElementById("prepopulate-charge") as HTMLInputElement;
-    prepopulateCheckbox.onchange = () => {
-      const rulesDiv = document.getElementById("prepopulate-rules");
-      rulesDiv.style.display = prepopulateCheckbox.checked ? "block" : "none";
-    };
+    // Initialize with current state
+    currentMatterLoaded = matterSelect.value || null;
+    updateUIForMatterState();
 
-    // Load saved matter profiles on startup
-    loadMatterProfiles();
-
-    // Initialize fee earners table with one empty row
-    loadFeeEarnersTable([]);
-
-    // Initialize rules with defaults
-    loadRulesConfig(getDefaultRules());
-
-    // Initialize nickname database
-    loadNicknameDatabase({});
-
-    // Initialize undo button state
-    updateUndoButtonState();
-
-    // Reset table scroll position
-    setTimeout(() => resetTableScroll(), 200);
-
-    // Tab switching functionality
-    const tabButtons = document.querySelectorAll(".tab-button");
-    const tabContents = document.querySelectorAll(".tab-content");
-
-    tabButtons.forEach((button) => {
-      button.addEventListener("click", () => {
-        const targetTab = button.getAttribute("data-tab");
-
-        // Remove active class from all buttons and contents
-        tabButtons.forEach((btn) => btn.classList.remove("active"));
-        tabContents.forEach((content) => content.classList.remove("active"));
-
+    // Update matter dropdown with saved profiles
+    updateMatterDropdown();
+    
+    // Set up tab functionality
+    const tabButtons = document.querySelectorAll('.tab-button');
+    tabButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        const targetTab = this.getAttribute('data-tab');
+        
+        // Remove active class from all buttons and content
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        
         // Add active class to clicked button and corresponding content
-        button.classList.add("active");
-        document.getElementById(`${targetTab}-tab`).classList.add("active");
+        this.classList.add('active');
+        const targetContent = document.getElementById(targetTab + '-tab');
+        if (targetContent) {
+          targetContent.classList.add('active');
+        }
+        
+        addDebugInfo(`Switched to ${targetTab} tab`);
       });
     });
-
-    // Dropdown functionality
-    const dropdownHeaders = document.querySelectorAll(".dropdown-header");
-    dropdownHeaders.forEach((header) => {
-      // Initialize all dropdowns as collapsed
-      header.classList.add("collapsed");
-      const arrow = header.querySelector(".dropdown-arrow");
-      if (arrow) {
-        arrow.textContent = "▶";
-      }
+    
+    // Set up dropdown functionality for Settings tab
+    const dropdownHeaders = document.querySelectorAll('.dropdown-header[data-target]');
+    dropdownHeaders.forEach(header => {
+      // Add cursor pointer to make it clear it's clickable
+      header.style.cursor = 'pointer';
       
-      header.addEventListener("click", () => {
-        const targetId = header.getAttribute("data-target");
-        const content = document.getElementById(targetId);
-        const arrow = header.querySelector(".dropdown-arrow");
-
-        if (content.style.display === "none" || content.style.display === "") {
-          content.style.display = "block";
-          header.classList.remove("collapsed");
-          arrow.textContent = "▼";
+      header.addEventListener('click', function() {
+        const targetId = this.getAttribute('data-target');
+        const targetContent = document.getElementById(targetId);
+        const arrow = this.querySelector('.dropdown-arrow');
+        
+        if (targetContent && arrow) {
+          // Check current visibility (accounting for inline style and computed style)
+          const currentDisplay = targetContent.style.display;
+          const isVisible = currentDisplay !== 'none' && currentDisplay !== '';
           
-          // If this is the main Rules dropdown, ensure nested rule dropdowns are collapsed
-          if (targetId === "rules-content") {
-            collapseNestedRuleDropdowns();
-          }
-        } else {
-          content.style.display = "none";
-          header.classList.add("collapsed");
-          arrow.textContent = "▶";
+          // Toggle visibility
+          targetContent.style.display = isVisible ? 'none' : 'block';
+          
+          // Toggle arrow direction
+          arrow.textContent = isVisible ? '▼' : '▲';
+          
+          addDebugInfo(`Toggled dropdown: ${targetId} - now ${isVisible ? 'hidden' : 'visible'}`);
         }
       });
+      
+      // Set initial arrow direction based on content visibility
+      const targetId = header.getAttribute('data-target');
+      const targetContent = document.getElementById(targetId);
+      const arrow = header.querySelector('.dropdown-arrow');
+      
+      if (targetContent && arrow) {
+        const currentDisplay = targetContent.style.display;
+        const isVisible = currentDisplay !== 'none' && currentDisplay !== '';
+        arrow.textContent = isVisible ? '▲' : '▼';
+      }
     });
+  }
+  } catch (error) {
+    console.error("Error in Office.onReady:", error);
+    // Show error visibly in the task pane
+    const appBody = document.getElementById("app-body");
+    if (appBody) {
+      const errorDiv = document.createElement("div");
+      errorDiv.style.backgroundColor = "#ffebee";
+      errorDiv.style.color = "#c62828";
+      errorDiv.style.padding = "10px";
+      errorDiv.style.border = "1px solid #f44336";
+      errorDiv.style.marginBottom = "10px";
+      errorDiv.innerHTML = `<strong>JavaScript Error:</strong><br>${error.message}<br><br>Stack: ${error.stack}`;
+      appBody.insertBefore(errorDiv, appBody.firstChild);
+    }
   }
 });
 
-// Function to collapse nested rule dropdowns when main Rules dropdown is opened
-function collapseNestedRuleDropdowns() {
-  const nestedDropdowns = [
-    { contentId: "time-format-content", headerSelector: '[data-target="time-format-content"]' },
-    { contentId: "name-standardisation-content", headerSelector: '[data-target="name-standardisation-content"]' },
-    { contentId: "missing-time-entries-content", headerSelector: '[data-target="missing-time-entries-content"]' },
-    { contentId: "needs-detail-content", headerSelector: '[data-target="needs-detail-content"]' }
-  ];
-  
-  nestedDropdowns.forEach(dropdown => {
-    const content = document.getElementById(dropdown.contentId);
-    const header = document.querySelector(dropdown.headerSelector);
-    const arrow = header?.querySelector(".dropdown-arrow");
-    
-    if (content && header && arrow) {
-      // Collapse the dropdown
-      content.style.display = "none";
-      header.classList.add("collapsed");
-      arrow.textContent = "▶";
-    }
-  });
+// Debug functionality
+function clearDebugInfo() {
+  const debugDiv = document.querySelector(".debug-section .debug-content");
+  if (debugDiv) {
+    debugDiv.innerHTML = "";
+  }
 }
 
-// Combined formatting function that applies all formatting operations
+function addDebugInfo(message: string) {
+  // Make debug area visible
+  const debugArea = document.getElementById("debug-area");
+  if (debugArea) {
+    debugArea.style.display = "block";
+  }
+  
+  // Add debug message
+  const debugDiv = document.getElementById("debug-content");
+  if (debugDiv) {
+    const timestamp = new Date().toLocaleTimeString();
+    const debugLine = document.createElement("div");
+    debugLine.innerHTML = `[${timestamp}] ${message}`;
+    debugDiv.appendChild(debugLine);
+
+    // Auto-scroll to bottom
+    debugDiv.scrollTop = debugDiv.scrollHeight;
+  } else {
+    // Fallback to console if debug div not found
+    console.log(`[DEBUG] ${message}`);
+  }
+}
+
+// Utility function to get column index by header name (case insensitive)
+function getColumnIndex(headers: string[], columnName: string): number {
+  return headers.findIndex(
+    (header) => header && header.toString().toLowerCase() === columnName.toLowerCase()
+  );
+}
+
+// Helper function to safely get cell value
+function getCellValue(values: any[][], row: number, col: number): string {
+  if (row >= 0 && row < values.length && col >= 0 && col < values[row].length) {
+    const value = values[row][col];
+    return value ? value.toString() : "";
+  }
+  return "";
+}
+
+// Validate that required columns exist
+function validateColumns(
+  headers: string[],
+  requiredColumns: string[]
+): { isValid: boolean; missingColumns: string[] } {
+  const missingColumns = requiredColumns.filter(
+    (col) => !headers.some((h) => h && h.toLowerCase() === col.toLowerCase())
+  );
+  return {
+    isValid: missingColumns.length === 0,
+    missingColumns,
+  };
+}
+
+function updateUIForMatterState() {
+  const quickActionsSection = document.getElementById("quick-actions-section");
+
+  if (currentMatterLoaded) {
+    // Update current matter display
+    const currentMatterName = document.getElementById("current-matter-name");
+    if (currentMatterName) {
+      currentMatterName.textContent = currentMatterLoaded;
+    }
+    
+    // Show the Quick Actions section with buttons
+    if (quickActionsSection) {
+      quickActionsSection.style.display = "block";
+    }
+
+    // Show matter selection in Settings tab header if not already there
+    const settingsHeader = document.querySelector("#settings-tab .settings-matter-info");
+    if (settingsHeader) {
+      settingsHeader.textContent = `Current Matter: ${currentMatterLoaded}`;
+      settingsHeader.style.display = "block";
+    }
+  } else {
+    // Hide the Quick Actions section when no matter is selected
+    if (quickActionsSection) {
+      quickActionsSection.style.display = "none";
+    }
+
+    // Hide matter info in Settings tab
+    const settingsHeader = document.querySelector("#settings-tab .settings-matter-info");
+    if (settingsHeader) {
+      settingsHeader.style.display = "none";
+    }
+  }
+}
+
+function handleMatterSelect() {
+  const matterSelect = document.getElementById("matter-select") as HTMLSelectElement;
+  const selectedMatter = matterSelect.value;
+  
+  console.log(`handleMatterSelect called with value: "${selectedMatter}"`);
+  addDebugInfo(`handleMatterSelect called with value: "${selectedMatter}"`);
+
+  if (selectedMatter === "__new__") {
+    // Handle "Add New Matter" selection
+    console.log("Detected Add New Matter selection - calling showAddNewMatterUI");
+    addDebugInfo("Detected Add New Matter selection - calling showAddNewMatterUI");
+    showAddNewMatterUI();
+    addDebugInfo("Add New Matter selected - showing creation UI");
+  } else if (selectedMatter) {
+    currentMatterLoaded = selectedMatter;
+
+    // Load matter profile settings into the form
+    const profiles = getMatterProfiles();
+    const profile = profiles.find((p) => p.name === selectedMatter);
+
+    if (profile) {
+      loadMatterProfile(profile);
+      addDebugInfo(`Loaded matter profile: ${selectedMatter}`);
+    }
+  } else {
+    currentMatterLoaded = null;
+  }
+
+  updateUIForMatterState();
+}
+
+function showAddNewMatterUI() {
+  addDebugInfo("showAddNewMatterUI function called");
+  
+  // Switch to the Settings tab
+  const settingsTab = document.querySelector('[data-tab="settings"]') as HTMLElement;
+  const mainTab = document.querySelector('[data-tab="main"]') as HTMLElement;
+  const settingsContent = document.getElementById("settings-tab") as HTMLElement;
+  const mainContent = document.getElementById("main-tab") as HTMLElement;
+  
+  addDebugInfo(`Found elements - settingsTab: ${!!settingsTab}, mainTab: ${!!mainTab}, settingsContent: ${!!settingsContent}, mainContent: ${!!mainContent}`);
+  
+  if (settingsTab && mainTab && settingsContent && mainContent) {
+    // Update tab buttons
+    mainTab.classList.remove("active");
+    settingsTab.classList.add("active");
+    
+    // Update tab content
+    mainContent.classList.remove("active");
+    settingsContent.classList.add("active");
+    
+    // Show the new matter section
+    const newMatterSection = document.getElementById("new-matter-section") as HTMLElement;
+    if (newMatterSection) {
+      newMatterSection.style.display = "block";
+    }
+    
+    // Clear and focus the new matter name input
+    const newMatterInput = document.getElementById("new-matter-name") as HTMLInputElement;
+    if (newMatterInput) {
+      newMatterInput.value = "";
+      newMatterInput.focus();
+    }
+    
+    // Reset the dropdown to default state
+    const matterSelect = document.getElementById("matter-select") as HTMLSelectElement;
+    if (matterSelect) {
+      matterSelect.value = "";
+    }
+  }
+}
+
+function showMessage(message: string, type: "success" | "error" | "info" = "info") {
+  // Create or update the message element
+  let messageEl = document.getElementById("message-display");
+  if (!messageEl) {
+    messageEl = document.createElement("div");
+    messageEl.id = "message-display";
+    messageEl.style.cssText = `
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      padding: 10px 15px;
+      border-radius: 4px;
+      font-weight: bold;
+      z-index: 1000;
+      max-width: 300px;
+      word-wrap: break-word;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    `;
+    document.body.appendChild(messageEl);
+  }
+
+  // Set message and style based on type
+  messageEl.textContent = message;
+  messageEl.className = `message-${type}`;
+
+  // Style based on type
+  switch (type) {
+    case "success":
+      messageEl.style.backgroundColor = "#d4edda";
+      messageEl.style.color = "#155724";
+      messageEl.style.border = "1px solid #c3e6cb";
+      break;
+    case "error":
+      messageEl.style.backgroundColor = "#f8d7da";
+      messageEl.style.color = "#721c24";
+      messageEl.style.border = "1px solid #f5c6cb";
+      break;
+    default: // info
+      messageEl.style.backgroundColor = "#d1ecf1";
+      messageEl.style.color = "#0c5460";
+      messageEl.style.border = "1px solid #bee5eb";
+  }
+
+  // Show the message
+  messageEl.style.display = "block";
+
+  // Hide after 3 seconds
+  setTimeout(() => {
+    if (messageEl && messageEl.parentNode) {
+      messageEl.style.display = "none";
+    }
+  }, 3000);
+}
+
 async function applyFormatting() {
   try {
+    addDebugInfo("Starting formatting process...");
+    
     // Execute all three formatting operations in sequence
+    addDebugInfo("Step 1: Applying spreadsheet formatting...");
     await formatSpreadsheet();
+    
+    addDebugInfo("Step 2: Adding columns...");
     await addColumns();
+    
+    addDebugInfo("Step 3: Color coding rows...");
     await colorCodeRows();
 
+    addDebugInfo("Formatting completed successfully!");
     showMessage("Formatting applied successfully.", "success");
   } catch (error) {
     console.error("Error applying formatting:", error);
+    addDebugInfo(`Formatting error: ${error.message}`);
     showMessage("An error occurred while applying formatting: " + error.message, "error");
   }
 }
 
 export async function formatSpreadsheet() {
   try {
+    addDebugInfo("formatSpreadsheet: Starting Excel.run...");
     await Excel.run(async (context) => {
+      addDebugInfo("formatSpreadsheet: Getting active worksheet...");
       // Get the active worksheet
       const worksheet = context.workbook.worksheets.getActiveWorksheet();
 
+      addDebugInfo("formatSpreadsheet: Getting used range...");
       // Get the used range
       const usedRange = worksheet.getUsedRange();
       usedRange.load(["rowCount", "columnCount"]);
 
+      addDebugInfo("formatSpreadsheet: First context.sync...");
       await context.sync();
 
+      addDebugInfo("formatSpreadsheet: Checking if usedRange exists...");
       if (!usedRange) {
         showMessage("No data found in the worksheet to format.", "error");
         return;
       }
 
-      // Get user configuration values
-      const headerBgColor = (document.getElementById("header-bg-color") as HTMLInputElement).value;
-      const headerTextColor = (document.getElementById("header-text-color") as HTMLInputElement)
-        .value;
-      const altRowColor1 = (document.getElementById("alt-row-color1") as HTMLInputElement).value;
-      const altRowColor2 = (document.getElementById("alt-row-color2") as HTMLInputElement).value;
-      const borderColor = (document.getElementById("border-color") as HTMLInputElement).value;
-      const maxColumnWidth = parseInt(
-        (document.getElementById("max-column-width") as HTMLInputElement).value,
-        10
-      );
-      const enableAlternatingRows = (
-        document.getElementById("enable-alternating-rows") as HTMLInputElement
-      ).checked;
-      const verticalAlignment = (document.getElementById("vertical-alignment") as HTMLSelectElement)
-        .value;
+      addDebugInfo("formatSpreadsheet: Getting user configuration values...");
+      // Get user configuration values with defaults in case elements don't exist
+      const headerBgColorEl = document.getElementById("header-bg-color") as HTMLInputElement;
+      const headerBgColor = headerBgColorEl ? headerBgColorEl.value : "#0078d4";
+      
+      const headerTextColorEl = document.getElementById("header-text-color") as HTMLInputElement;
+      const headerTextColor = headerTextColorEl ? headerTextColorEl.value : "#ffffff";
+      
+      const altRowColor1El = document.getElementById("alt-row-color1") as HTMLInputElement;
+      const altRowColor1 = altRowColor1El ? altRowColor1El.value : "#f9f9f9";
+      
+      const altRowColor2El = document.getElementById("alt-row-color2") as HTMLInputElement;
+      const altRowColor2 = altRowColor2El ? altRowColor2El.value : "#ffffff";
+      
+      const borderColorEl = document.getElementById("border-color") as HTMLInputElement;
+      const borderColor = borderColorEl ? borderColorEl.value : "#d1d1d1";
+      
+      const maxColumnWidthEl = document.getElementById("max-column-width") as HTMLInputElement;
+      const maxColumnWidth = maxColumnWidthEl ? parseInt(maxColumnWidthEl.value, 10) : 200;
+      
+      const enableAlternatingRowsEl = document.getElementById("enable-alternating-rows") as HTMLInputElement;
+      const enableAlternatingRows = enableAlternatingRowsEl ? enableAlternatingRowsEl.checked : true;
+      
+      const verticalAlignmentEl = document.getElementById("vertical-alignment") as HTMLSelectElement;
+      const verticalAlignment = verticalAlignmentEl ? verticalAlignmentEl.value : "Top";
+      
+      addDebugInfo(`formatSpreadsheet: Config - maxColumnWidth: ${maxColumnWidth}, enableAlternatingRows: ${enableAlternatingRows}`);
 
+      addDebugInfo("formatSpreadsheet: Starting header formatting...");
       // Format headers (first row)
+      addDebugInfo("formatSpreadsheet: Getting header row...");
       const headerRow = usedRange.getRow(0);
+      
+      addDebugInfo("formatSpreadsheet: Setting header font bold...");
       headerRow.format.font.bold = true;
+      
+      addDebugInfo("formatSpreadsheet: Setting header background color...");
       headerRow.format.fill.color = headerBgColor;
+      
+      addDebugInfo("formatSpreadsheet: Setting header text color...");
       headerRow.format.font.color = headerTextColor;
-      headerRow.format.horizontalAlignment = "Center";
-      headerRow.format.verticalAlignment = verticalAlignment;
 
-      // Add borders to entire used range
-      const borderItems = [
-        "EdgeTop",
-        "EdgeBottom",
-        "EdgeLeft",
-        "EdgeRight",
-        "InsideHorizontal",
-        "InsideVertical",
-      ];
-      borderItems.forEach((item) => {
-        usedRange.format.borders.getItem(item).style = "Continuous";
-        usedRange.format.borders.getItem(item).color = borderColor;
-      });
-
-      // Auto-fit columns first
-      const columns = usedRange.getEntireColumn();
-      columns.format.autofitColumns();
-
+      addDebugInfo("formatSpreadsheet: Syncing header formatting...");
       await context.sync();
 
-      // Load all column widths at once to avoid sync in loop
-      const columnWidths = [];
+      addDebugInfo("formatSpreadsheet: Starting border formatting...");
+      // Apply borders to the entire range
+      addDebugInfo("formatSpreadsheet: Setting InsideHorizontal border...");
+      usedRange.format.borders.getItem("InsideHorizontal").style = "Continuous";
+      
+      addDebugInfo("formatSpreadsheet: Setting InsideHorizontal border color...");
+      usedRange.format.borders.getItem("InsideHorizontal").color = borderColor;
+      
+      addDebugInfo("formatSpreadsheet: Setting InsideVertical border...");
+      usedRange.format.borders.getItem("InsideVertical").style = "Continuous";
+      usedRange.format.borders.getItem("InsideVertical").color = borderColor;
+      
+      addDebugInfo("formatSpreadsheet: Setting remaining borders...");
+      usedRange.format.borders.getItem("EdgeTop").style = "Continuous";
+      usedRange.format.borders.getItem("EdgeTop").color = borderColor;
+      usedRange.format.borders.getItem("EdgeBottom").style = "Continuous";
+      usedRange.format.borders.getItem("EdgeBottom").color = borderColor;
+      usedRange.format.borders.getItem("EdgeLeft").style = "Continuous";
+      usedRange.format.borders.getItem("EdgeLeft").color = borderColor;
+      usedRange.format.borders.getItem("EdgeRight").style = "Continuous";
+      usedRange.format.borders.getItem("EdgeRight").color = borderColor;
+      
+      addDebugInfo("formatSpreadsheet: Syncing after border formatting...");
+      await context.sync();
+
+      // Apply alternating row colors (skip header row)
+      if (enableAlternatingRows) {
+        for (let i = 1; i < usedRange.rowCount; i++) {
+          const row = usedRange.getRow(i);
+          if (i % 2 === 1) {
+            row.format.fill.color = altRowColor1;
+          } else {
+            row.format.fill.color = altRowColor2;
+          }
+        }
+      }
+
+      // Set vertical alignment for all cells
+      usedRange.format.verticalAlignment = verticalAlignment;
+
+      // Auto-fit columns (temporarily disabled columnWidth constraint to debug)
+      addDebugInfo("formatSpreadsheet: Auto-fitting columns...");
       for (let col = 0; col < usedRange.columnCount; col++) {
         const column = usedRange.getColumn(col);
-        column.load("format/columnWidth");
-        columnWidths.push(column);
+        column.format.autofitColumns();
       }
-
-      await context.sync();
-
-      // Now process columns that exceed max width
-      for (let col = 0; col < columnWidths.length; col++) {
-        const column = columnWidths[col];
-        if (column.format.columnWidth > maxColumnWidth) {
-          column.format.columnWidth = maxColumnWidth;
-          column.format.wrapText = true;
-
-          // Adjust row height to accommodate wrapped text
-          const dataRows = usedRange
-            .getOffsetRange(1, 0)
-            .getResizedRange(usedRange.rowCount - 1, 0);
-          dataRows.format.rowHeight = 30; // Minimum row height for wrapped text
-        }
-      }
-
-      // Apply vertical alignment to all data rows
-      const dataRows = usedRange.getOffsetRange(1, 0).getResizedRange(usedRange.rowCount - 1, 0);
-      dataRows.format.verticalAlignment = verticalAlignment;
-
-      // Apply alternating row colors if enabled (skip header row)
-      if (enableAlternatingRows) {
-        for (let row = 1; row < usedRange.rowCount; row++) {
-          const dataRow = usedRange.getRow(row);
-          if (row % 2 === 0) {
-            dataRow.format.fill.color = altRowColor2; // Even rows
-          } else {
-            dataRow.format.fill.color = altRowColor1; // Odd rows
-          }
-        }
-      }
-
-      await context.sync();
-
-      showMessage(
-        "Spreadsheet formatted successfully with your custom styling options.",
-        "success"
-      );
-    });
-  } catch (error) {
-    console.error(error);
-    showMessage("An error occurred while formatting: " + error.message, "error");
-  }
-}
-
-async function addChargeColumnInternal(worksheet: Excel.Worksheet, usedRange: Excel.Range) {
-  // Get user inputs
-  const columnHeader =
-    (document.getElementById("column-header") as HTMLInputElement).value || "Charge";
-  const columnPosition = (document.getElementById("column-position") as HTMLSelectElement).value;
-  const shouldPrepopulate = (document.getElementById("prepopulate-charge") as HTMLInputElement)
-    .checked;
-
-  let targetColumn: Excel.Range;
-  let columnLetter: string;
-
-  if (columnPosition === "next") {
-    // Find the next available column
-    columnLetter = getColumnLetter(usedRange.columnCount + 1);
-    targetColumn = worksheet.getRange(`${columnLetter}:${columnLetter}`);
-  } else {
-    // Use the specified column
-    columnLetter = columnPosition;
-    targetColumn = worksheet.getRange(`${columnLetter}:${columnLetter}`);
-  }
-
-  // Get current matter settings for formatting
-  const headerBgColor = (document.getElementById("header-bg-color") as HTMLInputElement).value;
-  const headerTextColor = (document.getElementById("header-text-color") as HTMLInputElement).value;
-  const borderColor = (document.getElementById("border-color") as HTMLInputElement).value;
-
-  // Set the header in the first row with matter settings
-  const headerCell = worksheet.getRange(`${columnLetter}1`);
-  headerCell.values = [[columnHeader]];
-  headerCell.format.font.bold = true;
-  headerCell.format.fill.color = headerBgColor;
-  headerCell.format.font.color = headerTextColor;
-  headerCell.format.horizontalAlignment = "Center";
-
-  // Apply borders to header cell
-  const headerBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
-  headerBorderItems.forEach((item) => {
-    headerCell.format.borders.getItem(item).style = "Continuous";
-    headerCell.format.borders.getItem(item).color = borderColor;
-  });
-
-  // Add data validation for the charge column (from row 2 onwards)
-  const dataRange = worksheet.getRange(`${columnLetter}2:${columnLetter}${usedRange.rowCount}`);
-
-  // Apply data validation to restrict to Y, N, or Q
-  dataRange.dataValidation.rule = {
-    list: {
-      inCellDropDown: true,
-      source: "Y,N,Q",
-    },
-  };
-
-  // Apply borders to data cells
-  const dataBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
-  dataBorderItems.forEach((item) => {
-    dataRange.format.borders.getItem(item).style = "Continuous";
-    dataRange.format.borders.getItem(item).color = borderColor;
-  });
-
-  // Set values based on prepopulation setting
-  let values = [];
-  if (shouldPrepopulate) {
-    // Find narrative/description column
-    const narrativeColumnIndex = findNarrativeColumn(usedRange.values[0]);
-
-    if (narrativeColumnIndex !== -1) {
-      values = prepopulateChargeValues(usedRange.values, narrativeColumnIndex);
-    } else {
-      // Default to Q if no narrative column found
-      for (let i = 0; i < usedRange.rowCount - 1; i++) {
-        values.push(["Q"]);
-      }
-      showMessage("No Narrative/Description column found. Defaulting to 'Q' values.", "warning");
-    }
-  } else {
-    // Default to "Q" (Query) when not prepopulating
-    for (let i = 0; i < usedRange.rowCount - 1; i++) {
-      values.push(["Q"]);
-    }
-  }
-  dataRange.values = values;
-
-  // Format the data cells
-  dataRange.format.horizontalAlignment = "Center";
-
-  // Apply alternating row colors if enabled
-  const enableAlternatingRows = (
-    document.getElementById("enable-alternating-rows") as HTMLInputElement
-  ).checked;
-  if (enableAlternatingRows) {
-    const altRowColor1 = (document.getElementById("alt-row-color1") as HTMLInputElement).value;
-    const altRowColor2 = (document.getElementById("alt-row-color2") as HTMLInputElement).value;
-
-    // Apply alternating colors to each row in the charge column
-    for (let row = 2; row <= usedRange.rowCount; row++) {
-      const cell = worksheet.getRange(`${columnLetter}${row}`);
-      if (row % 2 === 0) {
-        cell.format.fill.color = altRowColor2; // Even rows
-      } else {
-        cell.format.fill.color = altRowColor1; // Odd rows
-      }
-    }
-  }
-
-  // Auto-fit the column width
-  targetColumn.format.autofitColumns();
-}
-
-async function addChargeColumnAtPosition(
-  worksheet: Excel.Worksheet,
-  usedRange: Excel.Range,
-  columnNumber: number
-) {
-  // Get user inputs
-  const columnHeader =
-    (document.getElementById("column-header") as HTMLInputElement).value || "Charge";
-  const shouldPrepopulate = (document.getElementById("prepopulate-charge") as HTMLInputElement)
-    .checked;
-
-  // Calculate column letter for the specified position
-  const columnLetter = getColumnLetter(columnNumber);
-  const targetColumn = worksheet.getRange(`${columnLetter}:${columnLetter}`);
-
-  // Get current matter settings for formatting
-  const headerBgColor = (document.getElementById("header-bg-color") as HTMLInputElement).value;
-  const headerTextColor = (document.getElementById("header-text-color") as HTMLInputElement).value;
-  const borderColor = (document.getElementById("border-color") as HTMLInputElement).value;
-
-  // Set the header in the first row with matter settings
-  const headerCell = worksheet.getRange(`${columnLetter}1`);
-  headerCell.values = [[columnHeader]];
-  headerCell.format.font.bold = true;
-  headerCell.format.fill.color = headerBgColor;
-  headerCell.format.font.color = headerTextColor;
-  headerCell.format.horizontalAlignment = "Center";
-
-  // Apply borders to header cell
-  const headerBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
-  headerBorderItems.forEach((item) => {
-    headerCell.format.borders.getItem(item).style = "Continuous";
-    headerCell.format.borders.getItem(item).color = borderColor;
-  });
-
-  // Add data validation for the charge column (from row 2 onwards)
-  const dataRange = worksheet.getRange(`${columnLetter}2:${columnLetter}${usedRange.rowCount}`);
-
-  // Apply data validation to restrict to Y, N, or Q
-  dataRange.dataValidation.rule = {
-    list: {
-      inCellDropDown: true,
-      source: "Y,N,Q",
-    },
-  };
-
-  // Apply borders to data cells
-  const dataBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
-  dataBorderItems.forEach((item) => {
-    dataRange.format.borders.getItem(item).style = "Continuous";
-    dataRange.format.borders.getItem(item).color = borderColor;
-  });
-
-  // Set values based on prepopulation setting
-  let values = [];
-  if (shouldPrepopulate) {
-    // Find narrative/description column in the updated range
-    const narrativeColumnIndex = findNarrativeColumn(usedRange.values[0]);
-
-    if (narrativeColumnIndex !== -1) {
-      values = prepopulateChargeValues(usedRange.values, narrativeColumnIndex);
-    } else {
-      // Default to Q if no narrative column found
-      for (let i = 0; i < usedRange.rowCount - 1; i++) {
-        values.push(["Q"]);
-      }
-      showMessage("No Narrative/Description column found. Defaulting to 'Q' values.", "warning");
-    }
-  } else {
-    // Default to "Q" (Query) when not prepopulating
-    for (let i = 0; i < usedRange.rowCount - 1; i++) {
-      values.push(["Q"]);
-    }
-  }
-  dataRange.values = values;
-
-  // Format the data cells
-  dataRange.format.horizontalAlignment = "Center";
-
-  // Apply alternating row colors if enabled
-  const enableAlternatingRows = (
-    document.getElementById("enable-alternating-rows") as HTMLInputElement
-  ).checked;
-  if (enableAlternatingRows) {
-    const altRowColor1 = (document.getElementById("alt-row-color1") as HTMLInputElement).value;
-    const altRowColor2 = (document.getElementById("alt-row-color2") as HTMLInputElement).value;
-
-    // Apply alternating colors to each row in the charge column
-    for (let row = 2; row <= usedRange.rowCount; row++) {
-      const cell = worksheet.getRange(`${columnLetter}${row}`);
-      if (row % 2 === 0) {
-        cell.format.fill.color = altRowColor2; // Even rows
-      } else {
-        cell.format.fill.color = altRowColor1; // Odd rows
-      }
-    }
-  }
-
-  // Auto-fit the column width
-  targetColumn.format.autofitColumns();
-}
-
-export async function addChargeColumn() {
-  try {
-    await Excel.run(async (context) => {
-      // Get the active worksheet
-      const worksheet = context.workbook.worksheets.getActiveWorksheet();
-
-      // Get the used range to find the data
-      const usedRange = worksheet.getUsedRange();
-      usedRange.load(["rowCount", "columnCount", "values"]);
-
-      await context.sync();
-
-      if (!usedRange) {
-        showMessage("No data found in the worksheet.", "error");
-        return;
-      }
-
-      await addChargeColumnInternal(worksheet, usedRange);
-
-      await context.sync();
-
-      const columnHeader =
-        (document.getElementById("column-header") as HTMLInputElement).value || "Charge";
-      const columnPosition = (document.getElementById("column-position") as HTMLSelectElement)
-        .value;
-
-      const columnLetter =
-        columnPosition === "next" ? getColumnLetter(usedRange.columnCount + 1) : columnPosition;
-
-      showMessage(
-        `Successfully added '${columnHeader}' column at column ${columnLetter} with Y/N/Q options.`,
-        "success"
-      );
-    });
-  } catch (error) {
-    console.error(error);
-    showMessage("An error occurred: " + error.message, "error");
-  }
-}
-
-function getColumnLetter(columnNumber: number): string {
-  let columnLetter = "";
-  while (columnNumber > 0) {
-    const remainder = (columnNumber - 1) % 26;
-    columnLetter = String.fromCharCode(65 + remainder) + columnLetter;
-    columnNumber = Math.floor((columnNumber - 1) / 26);
-  }
-  return columnLetter;
-}
-
-function findNarrativeColumn(headerRow: any[]): number {
-  const narrativeKeywords = ["narrative", "description", "desc", "notes", "comment", "details"];
-
-  for (let i = 0; i < headerRow.length; i++) {
-    if (headerRow[i]) {
-      const headerText = headerRow[i].toString().toLowerCase();
-      if (narrativeKeywords.some((keyword) => headerText.includes(keyword))) {
-        return i;
-      }
-    }
-  }
-  return -1;
-}
-
-function findTimeColumn(headerRow: any[]): number {
-  const timeKeywords = ["time", "hours", "mins", "minutes", "duration"];
-
-  for (let i = 0; i < headerRow.length; i++) {
-    if (headerRow[i]) {
-      const headerText = headerRow[i].toString().toLowerCase();
-      if (timeKeywords.some((keyword) => headerText.includes(keyword))) {
-        return i;
-      }
-    }
-  }
-  return -1;
-}
-
-function findNameColumn(headerRow: any[]): number {
-  const nameKeywords = ["name", "fee earner", "lawyer", "attorney", "solicitor", "person", "who"];
-
-  for (let i = 0; i < headerRow.length; i++) {
-    if (headerRow[i]) {
-      const headerText = headerRow[i].toString().toLowerCase();
-      if (nameKeywords.some((keyword) => headerText.includes(keyword))) {
-        return i;
-      }
-    }
-  }
-  return -1;
-}
-
-function findNotesColumn(headerRow: any[]): number {
-  const notesKeywords = ["notes", "note", "rules applied", "tracking"];
-
-  for (let i = 0; i < headerRow.length; i++) {
-    if (headerRow[i]) {
-      const headerText = headerRow[i].toString().toLowerCase();
-      if (notesKeywords.some((keyword) => headerText.includes(keyword))) {
-        return i;
-      }
-    }
-  }
-  return -1;
-}
-
-async function createNotesColumn(worksheet: Excel.Worksheet, insertAfterColumn: number) {
-  // Insert new column
-  const insertColumn = worksheet.getCell(0, insertAfterColumn + 1).getEntireColumn();
-  insertColumn.insert(Excel.InsertShiftDirection.right);
-
-  // Set header
-  const headerCell = worksheet.getCell(0, insertAfterColumn + 1);
-  headerCell.values = [["Notes"]];
-
-  // Apply header formatting
-  const profiles = getMatterProfiles();
-  const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
-  const currentProfile = profiles.find((p) => p.name === selectedMatter);
-
-  if (currentProfile) {
-    const headerBgColor = currentProfile.headerBgColor || "#4472C4";
-    const headerTextColor = currentProfile.headerTextColor || "#FFFFFF";
-    const borderColor = currentProfile.borderColor || "#D1D5DB";
-
-    headerCell.format.fill.color = headerBgColor;
-    headerCell.format.font.color = headerTextColor;
-    headerCell.format.font.bold = true;
-    headerCell.format.horizontalAlignment = "Center";
-    headerCell.format.verticalAlignment = "Center";
-
-    // Apply borders
-    const borderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
-    borderItems.forEach((item) => {
-      headerCell.format.borders.getItem(item).style = "Continuous";
-      headerCell.format.borders.getItem(item).color = borderColor;
-    });
-  }
-
-  return insertAfterColumn + 1;
-}
-
-async function createNotesColumnWithFormatting(
-  worksheet: Excel.Worksheet,
-  usedRange: Excel.Range
-): Promise<number> {
-  // Double-check that Notes column doesn't already exist
-  const existingHeaders = usedRange.values[0] as string[];
-  const existingNotesIndex = findNotesColumn(existingHeaders);
-  if (existingNotesIndex !== -1) {
-    return existingNotesIndex;
-  }
-  
-  const insertAfterColumn = usedRange.columnCount - 1;
-  const newColumnIndex = usedRange.columnCount; // Store before insertion
-  const originalRowCount = usedRange.rowCount; // Store before insertion
-
-  // Insert new column at the far right
-  const insertColumn = worksheet.getCell(0, newColumnIndex).getEntireColumn();
-  insertColumn.insert(Excel.InsertShiftDirection.right);
-
-  const notesColumnIndex = newColumnIndex;
-
-  // Set header
-  const headerCell = worksheet.getCell(0, notesColumnIndex);
-  headerCell.values = [["Notes"]];
-
-  // Apply formatting that matches the current matter profile
-  const profiles = getMatterProfiles();
-  const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
-  const currentProfile = profiles.find((p) => p.name === selectedMatter);
-
-  if (currentProfile) {
-    const headerBgColor = currentProfile.headerBgColor || "#4472C4";
-    const headerTextColor = currentProfile.headerTextColor || "#FFFFFF";
-    const borderColor = currentProfile.borderColor || "#D1D5DB";
-    const altRowColor1 = currentProfile.altRowColor1 || "#FFFFFF";
-    const altRowColor2 = currentProfile.altRowColor2 || "#F8F9FA";
-    const enableAlternatingRows = currentProfile.enableAlternatingRows !== false;
-    const verticalAlignment = currentProfile.verticalAlignment || "center";
-
-    // Format header
-    headerCell.format.fill.color = headerBgColor;
-    headerCell.format.font.color = headerTextColor;
-    headerCell.format.font.bold = true;
-    headerCell.format.horizontalAlignment = "Center";
-    headerCell.format.verticalAlignment =
-      verticalAlignment === "center" ? "Center" : verticalAlignment === "top" ? "Top" : "Bottom";
-
-    // Apply header borders
-    const borderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
-    borderItems.forEach((item) => {
-      headerCell.format.borders.getItem(item).style = "Continuous";
-      headerCell.format.borders.getItem(item).color = borderColor;
-    });
-
-    // Format data cells (rows 2 onwards)
-    if (originalRowCount > 1) {
-      const dataRange = worksheet.getRangeByIndexes(1, notesColumnIndex, originalRowCount - 1, 1);
-
-      // Apply borders to all data cells
-      borderItems.forEach((item) => {
-        dataRange.format.borders.getItem(item).style = "Continuous";
-        dataRange.format.borders.getItem(item).color = borderColor;
-      });
-
-      // Apply vertical alignment
-      dataRange.format.verticalAlignment =
-        verticalAlignment === "center" ? "Center" : verticalAlignment === "top" ? "Top" : "Bottom";
-      dataRange.format.horizontalAlignment = "Left";
-
-      // Apply alternating row colors if enabled
-      if (enableAlternatingRows) {
-        for (let row = 1; row < originalRowCount; row++) {
-          const cell = worksheet.getCell(row, notesColumnIndex);
-          if (row % 2 === 0) {
-            cell.format.fill.color = altRowColor2;
-          } else {
-            cell.format.fill.color = altRowColor1;
-          }
-        }
-      }
-    }
-  }
-
-  return notesColumnIndex;
-}
-
-function addNoteToRow(notes: string, newNote: string): string {
-  if (!notes || notes.trim() === "") {
-    return newNote;
-  }
-
-  // Check if note already exists to avoid duplicates
-  const existingNotes = notes.split(",").map((n) => n.trim());
-  if (existingNotes.includes(newNote)) {
-    return notes; // Note already exists
-  }
-
-  return notes + ", " + newNote;
-}
-
-function findRoleColumn(headerRow: any[]): number {
-  const roleKeywords = ["role", "title", "position", "grade", "level", "rank"];
-
-  for (let i = 0; i < headerRow.length; i++) {
-    if (headerRow[i]) {
-      const headerText = headerRow[i].toString().toLowerCase();
-      if (roleKeywords.some((keyword) => headerText.includes(keyword))) {
-        return i;
-      }
-    }
-  }
-  return -1;
-}
-
-function findRateColumn(headerRow: any[]): number {
-  const rateKeywords = ["rate", "charge", "cost", "price", "fee", "bill", "amount"];
-
-  for (let i = 0; i < headerRow.length; i++) {
-    if (headerRow[i]) {
-      const headerText = headerRow[i].toString().toLowerCase();
-      if (rateKeywords.some((keyword) => headerText.includes(keyword))) {
-        return i;
-      }
-    }
-  }
-  return -1;
-}
-
-function prepopulateChargeValues(allValues: any[][], narrativeColumnIndex: number): string[][] {
-  const noChargeKeywords = (document.getElementById("no-charge-keywords") as HTMLInputElement).value
-    .toLowerCase()
-    .split(",")
-    .map((k) => k.trim())
-    .filter((k) => k.length > 0);
-
-  const values: string[][] = [];
-
-  // Skip header row (start from index 1)
-  for (let row = 1; row < allValues.length; row++) {
-    const narrativeText = allValues[row][narrativeColumnIndex]?.toString().toLowerCase() || "";
-
-    let chargeValue = "Y"; // Default to Yes (chargeable)
-
-    // If narrative text is empty or only whitespace, mark as Query
-    if (narrativeText.trim() === "") {
-      chargeValue = "Q";
-    }
-    // Check for no-charge keywords at the start of the narrative text
-    else if (noChargeKeywords.some((keyword) => narrativeText.startsWith(keyword))) {
-      chargeValue = "N";
-    }
-    // Otherwise, default to Y (chargeable)
-
-    values.push([chargeValue]);
-  }
-
-  return values;
-}
-
-function showMessage(message: string, type: string, timeout?: number) {
-  const messageDiv = document.getElementById("message");
-  const messageText = document.getElementById("message-text");
-
-  // Use innerText to preserve line breaks
-  messageText.innerText = message;
-  messageDiv.style.display = "block";
-
-  // Style based on type
-  if (type === "error") {
-    messageDiv.className = "ms-MessageBar ms-MessageBar--error";
-  } else if (type === "warning") {
-    messageDiv.className = "ms-MessageBar ms-MessageBar--warning";
-  } else {
-    messageDiv.className = "ms-MessageBar ms-MessageBar--success";
-  }
-
-  // Hide message after specified timeout or 5 seconds
-  setTimeout(() => {
-    messageDiv.style.display = "none";
-  }, timeout || 5000);
-}
-
-
-export async function colorCodeRows() {
-  try {
-    await Excel.run(async (context) => {
-      // Get the active worksheet
-      const worksheet = context.workbook.worksheets.getActiveWorksheet();
-
-      // Get the used range
-      const usedRange = worksheet.getUsedRange();
-      usedRange.load(["rowCount", "columnCount", "values"]);
-
-      await context.sync();
-
-      if (!usedRange) {
-        showMessage("No data found in the worksheet.", "error");
-        return;
-      }
-
-      // Find the Charge column
-      const headerRow = usedRange.values[0];
-      let chargeColumnIndex = -1;
-
-      for (let i = 0; i < headerRow.length; i++) {
-        if (headerRow[i] && headerRow[i].toString().toLowerCase().includes("charge")) {
-          chargeColumnIndex = i;
-          break;
-        }
-      }
-
-      if (chargeColumnIndex === -1) {
-        showMessage("No 'Charge' column found. Please add a Charge column first.", "error");
-        return;
-      }
-
-      // Apply color coding to each row based on the charge value
-      const values = usedRange.values;
-      for (let row = 1; row < usedRange.rowCount; row++) {
-        const chargeValue = values[row][chargeColumnIndex];
-        const actualRowIndex = row - 1; // Convert to 0-based index for Missing Time tracking
-        
-        // Check if this row has Missing Time formatting priority
-        if (missingTimeRows.has(actualRowIndex)) {
-          // Skip charge formatting for rows with Missing Time formatting
-          continue;
-        }
-
-        const rowRange = usedRange.getRow(row);
-
-        if (chargeValue === "Y") {
-          // Pale green for Yes
-          rowRange.format.fill.color = "#D4EDDA";
-        } else if (chargeValue === "N") {
-          // Pale red for No
-          rowRange.format.fill.color = "#F8D7DA";
-        } else if (chargeValue === "Q") {
-          // Pale amber/yellow for Query
-          rowRange.format.fill.color = "#FFF3CD";
-        }
-      }
-
-      await context.sync();
-
-      showMessage("Successfully applied color coding to rows based on Charge values.", "success");
-    });
-  } catch (error) {
-    console.error(error);
-    showMessage("An error occurred: " + error.message, "error");
-  }
-}
-
-async function addAmendedColumn(
-  worksheet: Excel.Worksheet,
-  columnIndex: number,
-  originalName: string,
-  amendedName: string,
-  usedRange: Excel.Range,
-  insertionOffsetCount: number
-): Promise<string> {
-  const adjustedIndex = columnIndex + insertionOffsetCount;
-  const columnLetter = getColumnLetter(adjustedIndex + 1);
-  const amendedColumnLetter = getColumnLetter(adjustedIndex + 2);
-
-  // Get current matter settings for formatting
-  const headerBgColor = (document.getElementById("header-bg-color") as HTMLInputElement).value;
-  const headerTextColor = (document.getElementById("header-text-color") as HTMLInputElement).value;
-  const borderColor = (document.getElementById("border-color") as HTMLInputElement).value;
-  const enableAlternatingRows = (
-    document.getElementById("enable-alternating-rows") as HTMLInputElement
-  ).checked;
-  const altRowColor1 = (document.getElementById("alt-row-color1") as HTMLInputElement).value;
-  const altRowColor2 = (document.getElementById("alt-row-color2") as HTMLInputElement).value;
-
-  // Rename existing column
-  const originalHeaderCell = worksheet.getRange(`${columnLetter}1`);
-  originalHeaderCell.values = [[originalName]];
-
-  // Insert new column to the right
-  const insertRange = worksheet.getRange(`${amendedColumnLetter}:${amendedColumnLetter}`);
-  insertRange.insert(Excel.InsertShiftDirection.right);
-
-  // Add amended header
-  const amendedHeaderCell = worksheet.getRange(`${amendedColumnLetter}1`);
-  amendedHeaderCell.values = [[amendedName]];
-  amendedHeaderCell.format.font.bold = true;
-  amendedHeaderCell.format.fill.color = headerBgColor;
-  amendedHeaderCell.format.font.color = headerTextColor;
-  amendedHeaderCell.format.horizontalAlignment = "Center";
-
-  // Apply borders to header
-  const headerBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
-  headerBorderItems.forEach((item) => {
-    amendedHeaderCell.format.borders.getItem(item).style = "Continuous";
-    amendedHeaderCell.format.borders.getItem(item).color = borderColor;
-  });
-
-  // Format data cells in the new column - using individual cell approach for consistency
-  if (usedRange.rowCount > 1) {
-    for (let row = 1; row < usedRange.rowCount; row++) {
-      const cell = worksheet.getCell(row, adjustedIndex + 1); // +1 because amended column is after original
       
-      // Apply borders to each cell
-      const dataBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
-      dataBorderItems.forEach((item) => {
-        cell.format.borders.getItem(item as any).style = "Continuous";
-        cell.format.borders.getItem(item as any).color = borderColor;
-      });
+      addDebugInfo("formatSpreadsheet: Syncing after auto-fit...");
+      await context.sync();
       
-      // Apply alternating row colors if enabled
-      if (enableAlternatingRows) {
-        if ((row + 1) % 2 === 0) {
-          cell.format.fill.color = altRowColor2;
-        } else {
-          cell.format.fill.color = altRowColor1;
-        }
-      }
-    }
+      addDebugInfo("formatSpreadsheet: Skipping columnWidth constraint for debugging...");
+    });
+  } catch (error) {
+    console.error("Error in formatSpreadsheet:", error);
+    throw error;
   }
-
-  // Auto-fit column widths for both original (renamed) and amended columns
-  const originalColumn = worksheet.getRange(`${columnLetter}:${columnLetter}`);
-  const amendedColumn = worksheet.getRange(`${amendedColumnLetter}:${amendedColumnLetter}`);
-
-  originalColumn.format.autofitColumns();
-  amendedColumn.format.autofitColumns();
-  
-  // Apply max width constraints if needed
-  const maxColumnWidth =
-    parseInt((document.getElementById("max-column-width") as HTMLInputElement).value, 10) || 300;
-
-  // Load current widths to check against max
-  originalColumn.load("format/columnWidth");
-  amendedColumn.load("format/columnWidth");
-  await worksheet.context.sync();
-
-  // Apply max width to original column if needed
-  if (originalColumn.format.columnWidth > maxColumnWidth) {
-    originalColumn.format.columnWidth = maxColumnWidth;
-    originalColumn.format.wrapText = true;
-  }
-
-  // Apply max width to amended column if needed
-  if (amendedColumn.format.columnWidth > maxColumnWidth) {
-    amendedColumn.format.columnWidth = maxColumnWidth;
-    amendedColumn.format.wrapText = true;
-  }
-
-  return amendedName.split(" ")[1]; // Return "Narrative" or "Time"
 }
 
 export async function addColumns() {
   try {
     await Excel.run(async (context) => {
-      // Get the active worksheet
       const worksheet = context.workbook.worksheets.getActiveWorksheet();
-
-      // Get the initial used range
-      let usedRange = worksheet.getUsedRange();
+      const usedRange = worksheet.getUsedRange();
       usedRange.load(["rowCount", "columnCount", "values"]);
 
       await context.sync();
@@ -1106,197 +622,226 @@ export async function addColumns() {
         return;
       }
 
-      // Get user settings
-      const columnHeader = (
-        document.getElementById("column-header") as HTMLInputElement
-      ).value.trim();
+      const values = usedRange.values;
+      const headers = values[0] as string[];
+
+      // Get user preferences
+      const columnHeader = (document.getElementById("column-header") as HTMLInputElement).value;
+      const columnPosition = (document.getElementById("column-position") as HTMLSelectElement)
+        .value;
       const prepopulateCharge = (document.getElementById("prepopulate-charge") as HTMLInputElement)
         .checked;
-      const shouldAddCharge = columnHeader !== "" || prepopulateCharge;
-      const shouldAddAmendedNarrative = (
+      const noChargeKeywords = (document.getElementById("no-charge-keywords") as HTMLInputElement)
+        .value;
+      const addAmendedNarrative = (
         document.getElementById("add-amended-narrative") as HTMLInputElement
       ).checked;
-      const shouldAddAmendedTime = (document.getElementById("add-amended-time") as HTMLInputElement)
+      const addAmendedTime = (document.getElementById("add-amended-time") as HTMLInputElement)
         .checked;
-      const shouldAddNotes = (document.getElementById("add-notes-column") as HTMLInputElement)
+      const addNotesColumn = (document.getElementById("add-notes-column") as HTMLInputElement)
         .checked;
 
-      // Also check if Name Standardisation is enabled - if so, we should add Notes column
-      const nameStandardisationEnabled = (
-        document.getElementById("name-standardisation-enabled") as HTMLInputElement
-      ).checked;
-      const shouldAddNotesForRules = shouldAddNotes || nameStandardisationEnabled;
-
-      const headerRow = usedRange.values[0];
-      let processedColumns = [];
-
-      // Find column indices once at the beginning
-      const narrativeColumnIndex = findNarrativeColumn(headerRow);
-      const timeColumnIndex = findTimeColumn(headerRow);
-
-      // Check for existing columns before processing
-      const existingAmendedNarrativeIndex = headerRow.findIndex(
-        (h) => h && h.toString().toLowerCase().includes("amended") && 
-               h.toString().toLowerCase().includes("narrative")
-      );
-      const existingOriginalNarrativeIndex = headerRow.findIndex(
-        (h) => h && h.toString().toLowerCase().includes("original") && 
-               h.toString().toLowerCase().includes("narrative")
-      );
-      const existingAmendedTimeIndex = headerRow.findIndex(
-        (h) => h && h.toString().toLowerCase().includes("amended") && 
-               h.toString().toLowerCase().includes("time")
-      );
-      const existingOriginalTimeIndex = headerRow.findIndex(
-        (h) => h && h.toString().toLowerCase().includes("original") && 
-               h.toString().toLowerCase().includes("time")
-      );
-      const existingChargeIndex = headerRow.findIndex(
-        (h) => h && h.toString().toLowerCase().includes("charge")
-      );
-      const existingNotesIndex = findNotesColumn(headerRow);
-
-      // PHASE 1: Process amended columns (right to left)
-      const columnsToProcess = [];
-
-      if (shouldAddAmendedNarrative && narrativeColumnIndex !== -1 && 
-          existingAmendedNarrativeIndex === -1) {
-        columnsToProcess.push({
-          index: narrativeColumnIndex,
-          originalName: "Original Narrative",
-          amendedName: "Amended Narrative",
-          type: "Narrative",
-        });
+      let insertIndex: number;
+      if (columnPosition === "beginning") {
+        insertIndex = 0;
+      } else {
+        insertIndex = headers.length;
       }
 
-      if (shouldAddAmendedTime && timeColumnIndex !== -1 && 
-          existingAmendedTimeIndex === -1) {
-        columnsToProcess.push({
-          index: timeColumnIndex,
-          originalName: "Original Time",
-          amendedName: "Amended Time",
-          type: "Time",
-        });
+      let columnsToAdd: string[] = [];
+      let newColumnCount = 0;
+
+      // Build list of columns to add
+      if (addAmendedNarrative) {
+        columnsToAdd.push("Amended Narrative");
+        newColumnCount++;
+      }
+      if (addAmendedTime) {
+        columnsToAdd.push("Amended Time");
+        newColumnCount++;
+      }
+      if (columnHeader && columnHeader.trim()) {
+        columnsToAdd.push(columnHeader.trim());
+        newColumnCount++;
+      }
+      if (addNotesColumn) {
+        columnsToAdd.push("Notes");
+        newColumnCount++;
       }
 
-      // Sort by column index descending (process rightmost columns first)
-      columnsToProcess.sort((a, b) => b.index - a.index);
-
-      // Process each amended column
-      for (const column of columnsToProcess) {
-        const columnType = await addAmendedColumn(
-          worksheet,
-          column.index,
-          column.originalName,
-          column.amendedName,
-          usedRange,
-          0 // No offset needed since we process from right to left
-        );
-        processedColumns.push(columnType);
+      if (newColumnCount === 0) {
+        addDebugInfo("No columns were configured to be added.");
+        return;
       }
 
-      // PHASE 2: Add charge column at the far right (if requested)
-      if (shouldAddCharge && existingChargeIndex === -1) {
-        // After amended columns are added, refresh the used range to get the updated column count
-        usedRange = worksheet.getUsedRange();
-        usedRange.load(["rowCount", "columnCount", "values"]);
-        await context.sync();
-
-        // Add charge column at the next available column (far right)
-        await addChargeColumnAtPosition(worksheet, usedRange, usedRange.columnCount + 1);
-        processedColumns.push("Charge");
-      }
-
-      // PHASE 3: Add Notes column at the far right (if requested or if Name Standardisation is enabled)
-      if (shouldAddNotesForRules) {
-        // After charge column is added, refresh the used range to get the updated column count
-        usedRange = worksheet.getUsedRange();
-        usedRange.load(["rowCount", "columnCount", "values"]);
-        await context.sync();
-
-        // Check if Notes column already exists (after other columns may have been added)
-        const updatedHeaderRow = usedRange.values[0];
-        const currentNotesIndex = findNotesColumn(updatedHeaderRow);
-
-        if (currentNotesIndex === -1) {
-          // Create Notes column at the far right with full formatting
-          await createNotesColumnWithFormatting(worksheet, usedRange);
-          processedColumns.push("Notes");
+      // Rename original columns if amended columns are being added
+      if (addAmendedNarrative || addAmendedTime) {
+        // First, check if columns exist and rename them
+        if (addAmendedNarrative) {
+          const narrativeCol = headers.findIndex((h) => h && h.toLowerCase() === "narrative");
+          if (narrativeCol !== -1) {
+            const narrativeHeaderCell = usedRange.getCell(0, narrativeCol);
+            narrativeHeaderCell.values = [["Original Narrative"]];
+            addDebugInfo("Renamed 'Narrative' column to 'Original Narrative'");
           }
+        }
+
+        if (addAmendedTime) {
+          const timeCol = headers.findIndex((h) => h && h.toLowerCase() === "time");
+          if (timeCol !== -1) {
+            const timeHeaderCell = usedRange.getCell(0, timeCol);
+            timeHeaderCell.values = [["Original Time"]];
+            addDebugInfo("Renamed 'Time' column to 'Original Time'");
+          }
+        }
       }
 
-      // Track skipped columns
-      const skippedColumns = [];
-      if (shouldAddAmendedNarrative && existingAmendedNarrativeIndex !== -1) {
-        skippedColumns.push("Amended Narrative");
-      }
-      if (shouldAddAmendedTime && existingAmendedTimeIndex !== -1) {
-        skippedColumns.push("Amended Time");
-      }
-      if (shouldAddCharge && existingChargeIndex !== -1) {
-        skippedColumns.push("Charge");
-      }
-      // For Notes column, we need to check if it already existed BEFORE we tried to create it
-      if (shouldAddNotesForRules && existingNotesIndex !== -1 && !processedColumns.includes("Notes")) {
-        skippedColumns.push("Notes");
+      // Insert new columns
+      const insertRange = worksheet
+        .getRange(
+          `${getColumnLetter(insertIndex + 1)}:${getColumnLetter(insertIndex + newColumnCount)}`
+        )
+        .getEntireColumn();
+      insertRange.insert(Excel.InsertShiftDirection.right);
+
+      // Add headers for new columns
+      for (let i = 0; i < columnsToAdd.length; i++) {
+        const headerCell = worksheet.getCell(0, insertIndex + i);
+        headerCell.values = [[columnsToAdd[i]]];
+        addDebugInfo(`Added column: ${columnsToAdd[i]}`);
       }
 
-      // Final auto-fit pass to ensure all columns are properly sized
-      if (processedColumns.length > 0) {
-        usedRange = worksheet.getUsedRange();
-        usedRange.load(["columnCount"]);
-        await context.sync();
+      // Prepopulate charge column if requested
+      if (prepopulateCharge && columnHeader && columnHeader.trim()) {
+        const chargeColumnIndex = insertIndex + columnsToAdd.indexOf(columnHeader.trim());
+        if (chargeColumnIndex >= insertIndex) {
+          const keywords = noChargeKeywords
+            .toLowerCase()
+            .split(",")
+            .map((k) => k.trim())
+            .filter((k) => k);
 
-        // Auto-fit all columns in the used range to account for any formatting changes
-        const allColumns = usedRange.getEntireColumn();
-        allColumns.format.autofitColumns();
+          // Find narrative column (check for "Original Narrative" first, then "Narrative")
+          let narrativeCol = headers.findIndex(
+            (h) => h && h.toLowerCase() === "original narrative"
+          );
+          if (narrativeCol === -1) {
+            narrativeCol = headers.findIndex((h) => h && h.toLowerCase() === "narrative");
+          }
+
+          if (narrativeCol !== -1) {
+            const updatedRange = worksheet.getUsedRange();
+            updatedRange.load(["rowCount", "values"]);
+            await context.sync();
+
+            const updatedValues = updatedRange.values;
+
+            for (let row = 1; row < updatedValues.length; row++) {
+              const narrative = (updatedValues[row][narrativeCol] || "").toString().toLowerCase();
+              let chargeValue = "Y"; // Default to billable
+
+              if (keywords.some((keyword) => narrative.includes(keyword))) {
+                chargeValue = "N";
+              }
+
+              const chargeCell = worksheet.getCell(row, chargeColumnIndex);
+              chargeCell.values = [[chargeValue]];
+            }
+            addDebugInfo(`Prepopulated ${columnHeader} column based on narrative keywords`);
+          }
+        }
       }
 
       await context.sync();
-
-      if (processedColumns.length > 0) {
-        const message = `Successfully added ${processedColumns.join(", ")} column${processedColumns.length > 1 ? "s" : ""}.`;
-        showMessage(message, "success");
-      } else if (skippedColumns.length > 0) {
-        const message = `All requested columns already exist: ${skippedColumns.join(", ")}.`;
-        showMessage(message, "info");
-      } else {
-        showMessage(
-          "No columns were configured to be added. Please check your settings.",
-          "warning"
-        );
-      }
     });
   } catch (error) {
-    console.error(error);
-    showMessage("An error occurred while adding columns: " + error.message, "error");
+    console.error("Error in addColumns:", error);
+    throw error;
   }
 }
 
-// Fee Earner Management
+function getColumnLetter(columnNumber: number): string {
+  let result = "";
+  while (columnNumber > 0) {
+    columnNumber--;
+    result = String.fromCharCode(65 + (columnNumber % 26)) + result;
+    columnNumber = Math.floor(columnNumber / 26);
+  }
+  return result;
+}
+
+export async function colorCodeRows() {
+  try {
+    await Excel.run(async (context) => {
+      const worksheet = context.workbook.worksheets.getActiveWorksheet();
+      const usedRange = worksheet.getUsedRange();
+      usedRange.load(["rowCount", "columnCount", "values"]);
+
+      await context.sync();
+
+      if (!usedRange) {
+        showMessage("No data found in the worksheet.", "error");
+        return;
+      }
+
+      const values = usedRange.values;
+      const headers = values[0] as string[];
+
+      // Find the charge column
+      const chargeCol = headers.findIndex((h) => h && h.toLowerCase() === "charge");
+
+      if (chargeCol === -1) {
+        addDebugInfo("Charge column not found. Skipping color coding.");
+        return;
+      }
+
+      // Color code based on charge values
+      for (let row = 1; row < usedRange.rowCount; row++) {
+        const chargeValue = values[row][chargeCol];
+        const rowRange = usedRange.getRow(row);
+
+        if (chargeValue === "Y") {
+          // Green for billable
+          rowRange.format.fill.color = "#d4edda";
+        } else if (chargeValue === "N") {
+          // Red for non-billable
+          rowRange.format.fill.color = "#f8d7da";
+        } else if (chargeValue === "Q") {
+          // Yellow for query
+          rowRange.format.fill.color = "#fff3cd";
+        }
+        // Keep default/alternating colors for other values
+      }
+
+      await context.sync();
+      addDebugInfo("Applied color coding to rows based on Charge column values");
+    });
+  } catch (error) {
+    console.error("Error in colorCodeRows:", error);
+    throw error;
+  }
+}
+
+// Matter profile management
 interface FeeEarner {
   name: string;
   role: string;
   rate: number;
-  email: string;
-  billingContact: "Fee Earner" | "Other";
-  billingContactName: string;
-  billingContactEmail: string;
-  isDefaultForName?: boolean;
-  nameVariations?: string[];
+  billing_name: string;
+  billing_email: string;
+  useAsDefault?: boolean;
 }
 
-// Rules Management
 interface NameStandardisationRule {
   enabled: boolean;
   caseSensitive: boolean;
   allowPartialMatches: boolean;
   useDateMatching: boolean;
   replaceOnlyFirstOccurrence: boolean;
-  excludedNames: string[];
-  minPartialMatchLength?: number; // Optional for backward compatibility
-  useNicknameDatabase?: boolean; // Optional for backward compatibility
-  customNicknames?: Record<string, string>; // nickname -> full name mapping
+  excludedNames?: string[];
+  minPartialMatchLength?: number;
+  useNicknameDatabase?: boolean;
+  customNicknames?: { [key: string]: string };
 }
 
 interface MissingTimeEntriesRule {
@@ -1343,6 +888,13 @@ interface NonChargeableRule {
   };
 }
 
+interface MaxDailyHoursRule {
+  enabled: boolean;
+  maxHours: number; // configurable maximum hours allowed per day
+  chargeValue: string; // value to set in Charge column (typically "Q")
+  noteText: string; // note to add to Notes column
+}
+
 interface RulesConfig {
   timeFormat: TimeFormatRule;
   nameStandardisation: NameStandardisationRule;
@@ -1350,6 +902,7 @@ interface RulesConfig {
   needsDetail: NeedsDetailRule;
   travel: TravelRule;
   nonChargeable: NonChargeableRule;
+  maxDailyHours: MaxDailyHoursRule;
 }
 
 // Built-in nickname database
@@ -1364,95 +917,144 @@ const DEFAULT_NICKNAMES: Record<string, string> = {
   robbie: "robert",
   dick: "richard",
   rick: "richard",
-  ricky: "richard",
   rich: "richard",
   richie: "richard",
+  mike: "michael",
+  mick: "michael",
+  mickey: "michael",
+  mikey: "michael",
   jim: "james",
   jimmy: "james",
   jamie: "james",
+  jack: "john",
+  johnny: "john",
+  jon: "jonathan",
   joe: "joseph",
   joey: "joseph",
-  mike: "michael",
-  mickey: "michael",
-  mick: "michael",
   dave: "david",
   davey: "david",
   dan: "daniel",
   danny: "daniel",
   tom: "thomas",
   tommy: "thomas",
-  chris: "christopher",
-  matt: "matthew",
-  steve: "stephen",
-  phil: "philip",
-  phil: "phillip",
   tony: "anthony",
-  andy: "andrew",
-  drew: "andrew",
-  nick: "nicholas",
-  john: "jonathan",
-  johnny: "jonathan",
-  ben: "benjamin",
-  benny: "benjamin",
-  alex: "alexander",
-  sam: "samuel",
-  sammy: "samuel",
+  ant: "anthony",
+  chris: "christopher",
   ed: "edward",
   eddie: "edward",
   ted: "edward",
   teddy: "edward",
+  steve: "stephen",
+  stevie: "stephen",
+  matt: "matthew",
+  matty: "matthew",
+  pete: "peter",
+  andy: "andrew",
+  drew: "andrew",
+  phil: "philip",
+  al: "alan",
+  alex: "alexander",
+  ben: "benjamin",
+  benny: "benjamin",
   charlie: "charles",
   chuck: "charles",
+  frank: "francis",
+  frankie: "francis",
+  greg: "gregory",
+  harry: "harold",
+  hank: "henry",
+  len: "leonard",
+  leo: "leonard",
+  max: "maximilian",
+  nick: "nicholas",
+  pat: "patrick",
+  paddy: "patrick",
+  ray: "raymond",
+  sam: "samuel",
+  sammy: "samuel",
   tim: "timothy",
+  vinny: "vincent",
+  vince: "vincent",
+  walt: "walter",
+  wally: "walter",
 
   // Common female nicknames
+  sue: "susan",
+  susie: "susan",
+  suzy: "susan",
   liz: "elizabeth",
   lizzy: "elizabeth",
   beth: "elizabeth",
   betty: "elizabeth",
-  sue: "susan",
-  susie: "susan",
-  suzy: "susan",
+  libby: "elizabeth",
+  eliza: "elizabeth",
+  lisa: "elizabeth",
   kate: "katherine",
   katie: "katherine",
   kathy: "katherine",
-  kit: "katherine",
   kitty: "katherine",
+  kit: "katherine",
+  cathy: "catherine",
+  cat: "catherine",
+  annie: "anne",
+  nan: "anne",
+  nancy: "anne",
+  maggie: "margaret",
+  meg: "margaret",
+  peggy: "margaret",
+  peg: "margaret",
   jen: "jennifer",
   jenny: "jennifer",
   jess: "jessica",
   jessie: "jessica",
-  lisa: "elizabeth",
-  mel: "melissa",
-  amy: "amanda",
-  mandy: "amanda",
-  chris: "christine",
-  chrissy: "christine",
-  tina: "christina",
+  becky: "rebecca",
+  becca: "rebecca",
+  debbie: "deborah",
+  deb: "deborah",
   cindy: "cynthia",
+  sandy: "sandra",
+  mandy: "amanda",
+  amy: "amelia",
+  mel: "melissa",
+  missy: "melissa",
+  steph: "stephanie",
+  steffi: "stephanie",
+  christie: "christine",
+  chris: "christine",
+  tina: "christina",
   patty: "patricia",
   pat: "patricia",
   trish: "patricia",
-  nancy: "nan",
-  ann: "anne",
-  annie: "anne",
-  maggie: "margaret",
-  meg: "margaret",
-  peggy: "margaret",
+  angie: "angela",
   carol: "caroline",
   carrie: "caroline",
-  julie: "julia",
-  jules: "julia",
+  donna: "madonna",
+  diane: "diana",
+  fran: "francine",
+  ginny: "virginia",
+  ginger: "virginia",
+  helen: "helena",
+  jo: "joanne",
+  joanie: "joanne",
+  judy: "judith",
+  jude: "judith",
+  linda: "belinda",
+  lynn: "carolyn",
   marie: "mary",
+  molly: "mary",
+  polly: "mary",
+  nina: "antonina",
+  penny: "penelope",
+  rosie: "rosemary",
   sally: "sarah",
-  sara: "sarah",
-  alex: "alexandra",
-  lexi: "alexandra",
-  sam: "samantha",
-  sammie: "samantha",
+  shelly: "michelle",
+  tammy: "tamara",
+  terry: "theresa",
+  val: "valerie",
+  vicky: "victoria",
+  wendy: "gwendolyn",
 };
 
-// Matter Profile Management
 interface MatterProfile {
   name: string;
   clientName?: string;
@@ -1503,22 +1105,136 @@ function getCurrentSettings(): MatterProfile {
       .checked,
     addAmendedTime: (document.getElementById("add-amended-time") as HTMLInputElement).checked,
     addNotesColumn: (document.getElementById("add-notes-column") as HTMLInputElement).checked,
-    feeEarners: getCurrentFeeEarners(),
-    rules: getCurrentRules(),
+    feeEarners: getFeeEarnersFromForm(),
+    rules: {
+      timeFormat: {
+        enabled: false,
+        outputFormat: "HH:MM",
+        roundToSixMinutes: true,
+      },
+      nameStandardisation: {
+        enabled: false,
+        caseSensitive: false,
+        allowPartialMatches: true,
+        useDateMatching: true,
+        replaceOnlyFirstOccurrence: true,
+        excludedNames: [],
+        minPartialMatchLength: 3,
+        useNicknameDatabase: true,
+        customNicknames: {},
+      },
+      missingTimeEntries: {
+        enabled: false,
+        dateTolerance: 0,
+        meetingKeywords: ["meeting", "call", "conference", "discussion", "telephone", "phone"],
+        requireExactTimeMatch: false,
+        createMissingEntries: false,
+      },
+      needsDetail: {
+        enabled: false,
+        minWordCount: 3,
+      },
+      travel: {
+        enabled: false,
+        keywords: [
+          "travel",
+          "travelling",
+          "drive",
+          "driving",
+          "airport",
+          "flight",
+          "hotel",
+          "accommodation",
+          "train",
+          "taxi",
+          "uber",
+          "journey",
+          "commute",
+          "transport",
+        ],
+        caseSensitive: false,
+        chargeValue: "N",
+        noteText: "NonBillable - Travel",
+      },
+      nonChargeable: {
+        enabled: false,
+        caseSensitive: false,
+        chargeValue: "N",
+        subcategories: {
+          clericalAdmin: {
+            enabled: false,
+            keywords: [
+              "filing",
+              "admin",
+              "administration",
+              "clerical",
+              "photocopying",
+              "scanning",
+              "organizing",
+              "office",
+              "paperwork",
+              "housekeeping",
+            ],
+          },
+          audit: {
+            enabled: false,
+            keywords: [
+              "audit",
+              "auditing",
+              "compliance",
+              "review",
+              "checking",
+              "verification",
+              "quality control",
+              "monitoring",
+            ],
+          },
+          ownError: {
+            enabled: false,
+            keywords: [
+              "mistake",
+              "error",
+              "correction",
+              "fix",
+              "redo",
+              "revise",
+              "amend",
+              "rectify",
+              "wrong",
+              "incorrect",
+            ],
+          },
+          research: {
+            enabled: false,
+            keywords: [
+              "research",
+              "investigating",
+              "learning",
+              "studying",
+              "training",
+              "education",
+              "reading",
+              "background",
+              "familiarization",
+            ],
+          },
+        },
+      },
+      maxDailyHours: {
+        enabled: false,
+        maxHours: 10,
+        chargeValue: "Q",
+        noteText: "Max Daily Hours Exceeded",
+      },
+    },
   };
 }
 
-function applySettings(profile: MatterProfile) {
-  // Apply matter profile fields
-  const matterProfileNameInput = document.getElementById("matter-profile-name") as HTMLInputElement;
-  if (matterProfileNameInput) {
-    matterProfileNameInput.value = profile.name || "";
-  }
+function loadMatterProfile(profile: MatterProfile) {
+  // Load basic settings
   (document.getElementById("client-name") as HTMLInputElement).value = profile.clientName || "";
   (document.getElementById("client-number") as HTMLInputElement).value = profile.clientNumber || "";
   (document.getElementById("matter-number") as HTMLInputElement).value = profile.matterNumber || "";
-  
-  // Apply formatting settings
   (document.getElementById("header-bg-color") as HTMLInputElement).value = profile.headerBgColor;
   (document.getElementById("header-text-color") as HTMLInputElement).value =
     profile.headerTextColor;
@@ -1530,341 +1246,130 @@ function applySettings(profile: MatterProfile) {
   (document.getElementById("enable-alternating-rows") as HTMLInputElement).checked =
     profile.enableAlternatingRows;
   (document.getElementById("vertical-alignment") as HTMLSelectElement).value =
-    profile.verticalAlignment || "center";
-
-  // Apply charge column settings with backward compatibility defaults
-  (document.getElementById("column-header") as HTMLInputElement).value =
-    profile.columnHeader || "Charge";
-  (document.getElementById("column-position") as HTMLSelectElement).value =
-    profile.columnPosition || "next";
+    profile.verticalAlignment;
+  (document.getElementById("column-header") as HTMLInputElement).value = profile.columnHeader;
+  (document.getElementById("column-position") as HTMLSelectElement).value = profile.columnPosition;
   (document.getElementById("prepopulate-charge") as HTMLInputElement).checked =
-    profile.prepopulateCharge || false;
+    profile.prepopulateCharge;
   (document.getElementById("no-charge-keywords") as HTMLInputElement).value =
     profile.noChargeKeywords;
-
-  // Apply amended column settings with backward compatibility defaults
   (document.getElementById("add-amended-narrative") as HTMLInputElement).checked =
-    profile.addAmendedNarrative || false;
+    profile.addAmendedNarrative;
   (document.getElementById("add-amended-time") as HTMLInputElement).checked =
-    profile.addAmendedTime || false;
+    profile.addAmendedTime;
   (document.getElementById("add-notes-column") as HTMLInputElement).checked =
-    profile.addNotesColumn || false;
+    profile.addNotesColumn;
 
-  // Apply fee earners settings with backward compatibility defaults
-  const feeEarners = profile.feeEarners || [];
-  loadFeeEarnersTable(feeEarners);
+  // Load fee earners
+  loadFeeEarnersIntoForm(profile.feeEarners);
 
-  // Apply rules settings with backward compatibility defaults
-  const rules = profile.rules || getDefaultRules();
-  loadRulesConfig(rules);
-
-  // Update prepopulation rules visibility based on checkbox state
-  const rulesDiv = document.getElementById("prepopulate-rules");
-  rulesDiv.style.display = profile.prepopulateCharge || false ? "block" : "none";
-}
-
-function loadMatterProfiles() {
-  const profiles = getMatterProfiles();
-  addDebugInfo(`Loading matter profiles: Found ${profiles.length} profiles`);
-  const selectElement = document.getElementById("matter-select") as HTMLSelectElement;
-
-  // Clear existing options and rebuild with default options
-  selectElement.innerHTML = '<option value="">-- Select a Matter --</option>';
-
-
-  // If no profiles exist, create a default one
-  if (profiles.length === 0) {
-
-    // Create a default "Project Apricot" matter profile to help user get started
-    const defaultProfile: MatterProfile = {
-      name: "Project Apricot",
-      headerBgColor: "#4472C4",
-      headerTextColor: "#FFFFFF",
-      altRowColor1: "#FFFFFF",
-      altRowColor2: "#F8F9FA",
-      borderColor: "#D1D5DB",
-      enableAlternatingRows: true,
-      maxColumnWidth: 300,
-      verticalAlignment: "center",
-      columnHeader: "Charge",
-      columnPosition: "next",
-      prepopulateCharge: false,
-      noChargeKeywords: ["NC", "DO NOT CHARGE", "Non Chargeable"],
-      addAmendedNarrative: false,
-      addAmendedTime: false,
-      addNotesColumn: true,
-      participants: {
-        feeEarners: [
-          {
-            name: "John Smith",
-            role: "Partner",
-            rate: 500,
-            email: "john.smith@example.com",
-            useAsDefault: true,
-            billingContact: false,
-          },
-          {
-            name: "Jane Doe",
-            role: "Associate",
-            rate: 300,
-            email: "jane.doe@example.com",
-            useAsDefault: false,
-            billingContact: false,
-          },
-        ],
-      },
-      rules: {
-        nameStandardisation: {
-          enabled: false,
-          caseSensitive: false,
-          allowPartialMatches: true,
-          useDateMatching: true,
-          replaceOnlyFirstOccurrence: true,
-          excludedNames: [],
-          minPartialMatchLength: 3,
-          useNicknameDatabase: true,
-          customNicknames: {},
-        },
-        missingTimeEntries: {
-          enabled: false,
-          dateTolerance: 0,
-          meetingKeywords: ["meeting", "call", "conference", "discussion", "telephone", "phone"],
-          requireExactTimeMatch: false,
-          createMissingEntries: false,
-        },
-      },
-    };
-
-    saveMatterProfiles([defaultProfile]);
+  // Load rules if they exist
+  if (profile.rules) {
+    loadRulesConfig(profile.rules);
   }
-
-  // Get current profiles (including any newly created default)
-  const currentProfiles = getMatterProfiles();
-
-  // Add all saved profiles to the dropdown
-  currentProfiles.forEach((profile) => {
-    const option = document.createElement("option");
-    option.value = profile.name;
-    option.textContent = profile.name;
-    selectElement.appendChild(option);
-  });
-
-  // Add the "Add New Matter" option at the end
-  const addNewOption = document.createElement("option");
-  addNewOption.value = "__new__";
-  addNewOption.textContent = "+ Add New Matter";
-  addNewOption.style.fontStyle = "italic";
-  selectElement.appendChild(addNewOption);
-
-  // If a matter is loaded, update the dropdown
-  if (currentMatterLoaded) {
-    selectElement.value = currentMatterLoaded;
-  }
-}
-
-function getMatterProfiles(): MatterProfile[] {
-  const stored = localStorage.getItem("fixmytime-matter-profiles");
-  return stored ? JSON.parse(stored) : [];
-}
-
-function saveMatterProfiles(profiles: MatterProfile[]) {
-  localStorage.setItem("fixmytime-matter-profiles", JSON.stringify(profiles));
 }
 
 function saveMatterProfile() {
-  const matterName = (document.getElementById("new-matter-name") as HTMLInputElement).value.trim();
+  // Check both possible input fields for matter name
+  const matterNameInput = document.getElementById("matter-name") as HTMLInputElement;
+  const newMatterNameInput = document.getElementById("new-matter-name") as HTMLInputElement;
+  
+  let name = "";
+  if (newMatterNameInput && newMatterNameInput.value.trim()) {
+    name = newMatterNameInput.value.trim();
+  } else if (matterNameInput && matterNameInput.value.trim()) {
+    name = matterNameInput.value.trim();
+  }
 
-  if (!matterName) {
+  if (!name) {
     showMessage("Please enter a matter name.", "error");
     return;
   }
 
-  const currentSettings = getCurrentSettings();
-  currentSettings.name = matterName;
-
   const profiles = getMatterProfiles();
-  const existingIndex = profiles.findIndex((p) => p.name === matterName);
+  const existingIndex = profiles.findIndex((p) => p.name === name);
+
+  const newProfile = getCurrentSettings();
+  newProfile.name = name;
 
   if (existingIndex >= 0) {
-    profiles[existingIndex] = currentSettings;
-    showMessage(`Matter profile "${matterName}" updated successfully.`, "success");
+    profiles[existingIndex] = newProfile;
+    showMessage(`Matter profile "${name}" updated successfully.`, "success");
   } else {
-    profiles.push(currentSettings);
-    showMessage(`Matter profile "${matterName}" saved successfully.`, "success");
+    profiles.push(newProfile);
+    showMessage(`Matter profile "${name}" saved successfully.`, "success");
   }
 
   saveMatterProfiles(profiles);
-  loadMatterProfiles();
+  updateMatterDropdown();
 
-  // Clear the input and select the saved matter
-  (document.getElementById("new-matter-name") as HTMLInputElement).value = "";
-  (document.getElementById("matter-select") as HTMLSelectElement).value = matterName;
-}
-
-function loadMatterProfile() {
-  const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
-
-  if (!selectedMatter) {
-    showMessage("Please select a matter to load.", "error");
-    return;
+  // Clear both matter name inputs
+  if (matterNameInput) {
+    matterNameInput.value = "";
   }
-
-  const profiles = getMatterProfiles();
-  const profile = profiles.find((p) => p.name === selectedMatter);
-
-  if (profile) {
-    applySettings(profile);
-    currentMatterLoaded = selectedMatter;
-
-    // Show current matter display
-    document.getElementById("current-matter-display").style.display = "block";
-    document.getElementById("current-matter-name").textContent = selectedMatter;
-
-    // Show Quick Actions section now that a matter is selected
-    document.getElementById("quick-actions-section").style.display = "block";
-
-    showMessage(`Matter profile "${selectedMatter}" loaded successfully.`, "success");
-  } else {
-    showMessage("Matter profile not found.", "error");
+  if (newMatterNameInput) {
+    newMatterNameInput.value = "";
+    
+    // Hide the new matter section after successful save
+    const newMatterSection = document.getElementById("new-matter-section") as HTMLElement;
+    if (newMatterSection) {
+      newMatterSection.style.display = "none";
+    }
   }
-}
-
-// Debug functions
-function addDebugInfo(message: string) {
-  const debugArea = document.getElementById("debug-area");
-  const debugContent = document.getElementById("debug-content");
-  if (debugArea && debugContent) {
-    debugArea.style.display = "block";
-    const timestamp = new Date().toLocaleTimeString();
-    debugContent.innerHTML += `[${timestamp}] ${message}\n`;
+  
+  // Set the newly created matter as selected in the dropdown
+  const matterSelect = document.getElementById("matter-select") as HTMLSelectElement;
+  if (matterSelect) {
+    matterSelect.value = name;
+    currentMatterLoaded = name;
+    updateUIForMatterState();
   }
-}
-
-function clearDebugInfo() {
-  const debugArea = document.getElementById("debug-area");
-  const debugContent = document.getElementById("debug-content");
-  if (debugArea && debugContent) {
-    debugArea.style.display = "none";
-    debugContent.innerHTML = "";
-  }
-}
-
-export function switchToSettingsTab() {
-  // Remove active class from all buttons and contents
-  const tabButtons = document.querySelectorAll(".tab-button");
-  const tabContents = document.querySelectorAll(".tab-content");
-
-  tabButtons.forEach((btn) => btn.classList.remove("active"));
-  tabContents.forEach((content) => content.classList.remove("active"));
-
-  // Add active class to settings tab
-  const settingsButton = document.querySelector('[data-tab="settings"]') as HTMLElement;
-  settingsButton.classList.add("active");
-  document.getElementById("settings-tab").classList.add("active");
-}
-
-export function showNewMatterSection() {
-  document.getElementById("new-matter-section").style.display = "block";
-  // Focus on the input field
-  (document.getElementById("new-matter-name") as HTMLInputElement).focus();
-}
-
-export function hideNewMatterSection() {
-  document.getElementById("new-matter-section").style.display = "none";
 }
 
 function deleteMatterProfile() {
   const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
 
   if (!selectedMatter) {
-    showMessage("Please select a matter to delete.", "error");
+    showMessage("Please select a matter profile to delete.", "error");
     return;
   }
 
   const profiles = getMatterProfiles();
   const filteredProfiles = profiles.filter((p) => p.name !== selectedMatter);
 
-  if (filteredProfiles.length < profiles.length) {
-    saveMatterProfiles(filteredProfiles);
-    loadMatterProfiles();
-
-    // If the deleted matter was the currently loaded one, reset the UI
-    if (currentMatterLoaded === selectedMatter) {
-      currentMatterLoaded = null;
-      document.getElementById("current-matter-display").style.display = "none";
-    }
-
-    showMessage(`Matter profile "${selectedMatter}" deleted successfully.`, "success");
-  } else {
+  if (filteredProfiles.length === profiles.length) {
     showMessage("Matter profile not found.", "error");
+    return;
   }
+
+  saveMatterProfiles(filteredProfiles);
+  updateMatterDropdown();
+  showMessage(`Matter profile "${selectedMatter}" deleted successfully.`, "success");
+
+  // Reset UI state
+  currentMatterLoaded = null;
+  updateUIForMatterState();
 }
+
 function saveCurrentSettings() {
   const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
 
   if (!selectedMatter) {
-    showMessage(
-      "Please select a matter from the dropdown to update, or create a new one in the Matter Profile Management section.",
-      "error"
-    );
+    showMessage("Please select a matter profile to save settings to.", "error");
     return;
   }
 
-  // Get the matter name from the Matter Profile dropdown if it was edited
-  const matterProfileNameInput = document.getElementById("matter-profile-name") as HTMLInputElement;
-  const newMatterName = matterProfileNameInput?.value?.trim();
-  
-  const currentSettings = getCurrentSettings();
-  
-  // If the matter name was changed in the Matter Profile dropdown, update it
-  if (newMatterName && newMatterName !== selectedMatter) {
-    currentSettings.name = newMatterName;
-    
-    // Check if the new name already exists
-    const profiles = getMatterProfiles();
-    const nameExists = profiles.some(p => p.name === newMatterName && p.name !== selectedMatter);
-    
-    if (nameExists) {
-      showMessage(
-        `A matter profile with the name "${newMatterName}" already exists. Please choose a different name.`,
-        "error"
-      );
-      return;
-    }
-    
-    // Remove the old profile and add with new name
-    const existingIndex = profiles.findIndex((p) => p.name === selectedMatter);
-    if (existingIndex >= 0) {
-      profiles.splice(existingIndex, 1);
-    }
-    profiles.push(currentSettings);
-    saveMatterProfiles(profiles);
-    
-    // Update the dropdown to reflect the new name
-    loadMatterProfiles();
-    (document.getElementById("matter-select") as HTMLSelectElement).value = newMatterName;
-    
-    showMessage(
-      `Matter profile renamed from "${selectedMatter}" to "${newMatterName}" and updated successfully.`,
-      "success"
-    );
-  } else {
-    // Keep the existing name
-    currentSettings.name = selectedMatter;
-    
-    const profiles = getMatterProfiles();
-    const existingIndex = profiles.findIndex((p) => p.name === selectedMatter);
+  const profiles = getMatterProfiles();
+  const existingIndex = profiles.findIndex((p) => p.name === selectedMatter);
 
-    if (existingIndex >= 0) {
-      profiles[existingIndex] = currentSettings;
-      saveMatterProfiles(profiles);
-      showMessage(
-        `Matter profile "${selectedMatter}" updated successfully with current settings.`,
-        "success"
-      );
-    } else {
-      showMessage("Selected matter profile not found. Please create a new profile first.", "error");
-    }
+  if (existingIndex >= 0) {
+    const updatedProfile = getCurrentSettings();
+    updatedProfile.name = selectedMatter;
+    profiles[existingIndex] = updatedProfile;
+    saveMatterProfiles(profiles);
+    showMessage(`Settings saved to matter profile "${selectedMatter}".`, "success");
+  } else {
+    showMessage("Selected matter profile not found.", "error");
   }
 }
 
@@ -1872,77 +1377,62 @@ function saveMatterProfileFromDropdown() {
   const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
 
   if (!selectedMatter) {
-    showMessage(
-      "Please select a matter from the dropdown first to save matter profile data.",
-      "error"
-    );
+    showMessage("Please select a matter profile first.", "error");
     return;
   }
 
-  // Get the matter name from the Matter Profile dropdown
-  const matterProfileNameInput = document.getElementById("matter-profile-name") as HTMLInputElement;
-  const newMatterName = matterProfileNameInput?.value?.trim();
-  
-  if (!newMatterName) {
-    showMessage("Please enter a matter name.", "error");
-    return;
+  // This is the same as saveCurrentSettings, just different messaging
+  saveCurrentSettings();
+}
+
+function getMatterProfiles(): MatterProfile[] {
+  const stored = localStorage.getItem("fixmytime-matter-profiles");
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch (e) {
+      console.error("Error parsing stored matter profiles:", e);
+    }
   }
+  return [];
+}
 
-  const currentSettings = getCurrentSettings();
-  currentSettings.name = newMatterName;
-
-  const profiles = getMatterProfiles();
-  
-  // If the matter name was changed, handle renaming
-  if (newMatterName !== selectedMatter) {
-    // Check if the new name already exists
-    const nameExists = profiles.some(p => p.name === newMatterName);
-    
-    if (nameExists) {
-      showMessage(
-        `A matter profile with the name "${newMatterName}" already exists. Please choose a different name.`,
-        "error"
-      );
-      return;
-    }
-    
-    // Remove the old profile
-    const existingIndex = profiles.findIndex((p) => p.name === selectedMatter);
-    if (existingIndex >= 0) {
-      profiles.splice(existingIndex, 1);
-    }
-    
-    // Add with new name
-    profiles.push(currentSettings);
-    saveMatterProfiles(profiles);
-    
-    // Update the dropdown to reflect the new name
-    loadMatterProfiles();
-    (document.getElementById("matter-select") as HTMLSelectElement).value = newMatterName;
-    
-    showMessage(
-      `Matter profile renamed from "${selectedMatter}" to "${newMatterName}" and saved successfully.`,
-      "success"
-    );
-  } else {
-    // Update existing profile with same name
-    const existingIndex = profiles.findIndex((p) => p.name === selectedMatter);
-    
-    if (existingIndex >= 0) {
-      profiles[existingIndex] = currentSettings;
-      saveMatterProfiles(profiles);
-      showMessage(
-        `Matter profile "${selectedMatter}" updated successfully.`,
-        "success"
-      );
-    } else {
-      showMessage("Selected matter profile not found. Please create a new profile first.", "error");
-    }
+function saveMatterProfiles(profiles: MatterProfile[]) {
+  try {
+    localStorage.setItem("fixmytime-matter-profiles", JSON.stringify(profiles));
+    addDebugInfo(`Saved ${profiles.length} matter profiles to localStorage`);
+  } catch (e) {
+    console.error("Error saving matter profiles:", e);
+    showMessage("Error saving matter profiles: " + e.message, "error");
   }
 }
 
-// Fee Earners Management Functions
-function getCurrentFeeEarners(): FeeEarner[] {
+function updateMatterDropdown() {
+  const dropdown = document.getElementById("matter-select") as HTMLSelectElement;
+  const profiles = getMatterProfiles();
+
+  // Clear existing options except the first one
+  dropdown.innerHTML = '<option value="">Select a matter profile...</option>';
+
+  profiles.forEach((profile) => {
+    const option = document.createElement("option");
+    option.value = profile.name;
+    option.textContent = profile.name;
+    dropdown.appendChild(option);
+  });
+
+  // Add the "Add New Matter" option
+  const addNewOption = document.createElement("option");
+  addNewOption.value = "__new__";
+  addNewOption.textContent = "+ Add New Matter";
+  addNewOption.style.fontStyle = "italic";
+  dropdown.appendChild(addNewOption);
+
+  addDebugInfo(`Updated matter dropdown with ${profiles.length} profiles`);
+}
+
+// Fee Earners functionality
+function getFeeEarnersFromForm(): FeeEarner[] {
   const tbody = document.getElementById("fee-earners-tbody");
   if (!tbody) return [];
 
@@ -1953,29 +1443,18 @@ function getCurrentFeeEarners(): FeeEarner[] {
     const nameInput = row.querySelector(".name-input") as HTMLInputElement;
     const roleInput = row.querySelector(".role-input") as HTMLInputElement;
     const rateInput = row.querySelector(".rate-input") as HTMLInputElement;
-    const emailInput = row.querySelector(".email-input") as HTMLInputElement;
-    const billingContactSelect = row.querySelector(".billing-contact-select") as HTMLSelectElement;
-    const billingContactNameInput = row.querySelector(
-      ".billing-contact-name-input"
-    ) as HTMLInputElement;
-    const billingContactEmailInput = row.querySelector(
-      ".billing-contact-email-input"
-    ) as HTMLInputElement;
+    const billingNameInput = row.querySelector(".billing-name-input") as HTMLInputElement;
+    const billingEmailInput = row.querySelector(".billing-email-input") as HTMLInputElement;
+    const useAsDefaultCheckbox = row.querySelector(".use-as-default-checkbox") as HTMLInputElement;
 
-    if (nameInput && roleInput && rateInput && emailInput && billingContactSelect) {
-      const useAsDefaultCheckbox = row.querySelector(
-        ".use-as-default-checkbox"
-      ) as HTMLInputElement;
-
+    if (nameInput && nameInput.value.trim()) {
       feeEarners.push({
         name: nameInput.value.trim(),
-        role: roleInput.value.trim(),
-        rate: parseFloat(rateInput.value) || 0,
-        email: emailInput.value.trim(),
-        billingContact: billingContactSelect.value as "Fee Earner" | "Other",
-        billingContactName: billingContactNameInput ? billingContactNameInput.value.trim() : "",
-        billingContactEmail: billingContactEmailInput ? billingContactEmailInput.value.trim() : "",
-        isDefaultForName: useAsDefaultCheckbox ? useAsDefaultCheckbox.checked : false,
+        role: roleInput?.value.trim() || "",
+        rate: parseFloat(rateInput?.value) || 0,
+        billing_name: billingNameInput?.value.trim() || "",
+        billing_email: billingEmailInput?.value.trim() || "",
+        useAsDefault: useAsDefaultCheckbox?.checked || false,
       });
     }
   });
@@ -1983,122 +1462,86 @@ function getCurrentFeeEarners(): FeeEarner[] {
   return feeEarners;
 }
 
-function loadFeeEarnersTable(feeEarners: FeeEarner[]) {
+function loadFeeEarnersIntoForm(feeEarners: FeeEarner[]) {
   const tbody = document.getElementById("fee-earners-tbody");
   if (!tbody) return;
 
+  // Clear existing rows
   tbody.innerHTML = "";
 
-  if (feeEarners.length === 0) {
-    // Add one empty row if no fee earners exist
-    addFeeEarnerRow();
-  } else {
-    feeEarners.forEach((feeEarner) => {
-      addFeeEarnerRowWithData(feeEarner);
-    });
+  // Add fee earners
+  feeEarners.forEach((feeEarner) => {
+    addFeeEarnerRow(feeEarner);
+  });
 
-    // Run duplicate detection after loading all fee earners
-    setTimeout(() => {
-      detectDuplicateNames();
-      resetTableScroll();
-    }, 100);
-  }
+  // Refresh duplicate detection
+  detectDuplicateNames();
 }
 
-function addFeeEarnerRow() {
-  const emptyFeeEarner: FeeEarner = {
-    name: "",
-    role: "",
-    rate: 0,
-    email: "",
-    billingContact: "Fee Earner",
-    billingContactName: "",
-    billingContactEmail: "",
-  };
-  addFeeEarnerRowWithData(emptyFeeEarner);
-}
-
-function addFeeEarnerRowWithData(feeEarner: FeeEarner) {
+function addFeeEarnerRow(feeEarner?: FeeEarner) {
   const tbody = document.getElementById("fee-earners-tbody");
   if (!tbody) return;
 
   const row = document.createElement("tr");
-  const isOtherBilling = feeEarner.billingContact === "Other";
-
   row.innerHTML = `
-    <td><input type="text" class="name-input" value="${feeEarner.name}" placeholder="Enter name"></td>
-    <td><input type="text" class="role-input" value="${feeEarner.role}" placeholder="Enter role"></td>
-    <td><input type="number" class="rate-input" value="${feeEarner.rate || ""}" placeholder="0.00" step="0.01" min="0"></td>
-    <td><input type="email" class="email-input" value="${feeEarner.email}" placeholder="Enter email"></td>
-    <td style="text-align: center;">
-      <input type="checkbox" class="use-as-default-checkbox" ${feeEarner.isDefaultForName ? "checked" : ""}>
+    <td><input type="text" class="name-input" value="${feeEarner?.name || ""}" placeholder="Enter name" oninput="detectDuplicateNames()"></td>
+    <td><input type="text" class="role-input" value="${feeEarner?.role || ""}" placeholder="Enter role" onchange="updateBillingFields(this)"></td>
+    <td><input type="number" class="rate-input" value="${feeEarner?.rate || ""}" placeholder="0.00" step="0.01" min="0"></td>
+    <td class="billing-name-cell ${!feeEarner?.role ? "disabled-field" : ""}">
+      <input type="text" class="billing-name-input" value="${feeEarner?.billing_name || ""}" placeholder="Auto-generated" ${!feeEarner?.role ? "disabled" : ""}>
+    </td>
+    <td class="billing-email-cell ${!feeEarner?.role ? "disabled-field" : ""}">
+      <input type="text" class="billing-email-input" value="${feeEarner?.billing_email || ""}" placeholder="Auto-generated" ${!feeEarner?.role ? "disabled" : ""}>
     </td>
     <td>
-      <select class="billing-contact-select">
-        <option value="Fee Earner" ${feeEarner.billingContact === "Fee Earner" ? "selected" : ""}>Fee Earner</option>
-        <option value="Other" ${feeEarner.billingContact === "Other" ? "selected" : ""}>Other</option>
-      </select>
+      <input type="checkbox" class="use-as-default-checkbox" ${feeEarner?.useAsDefault ? "checked" : ""} style="display: none;" onchange="handleDefaultCheckboxChange(event, this.closest('tr'))">
     </td>
-    <td class="${!isOtherBilling ? "disabled-field" : ""}">
-      <input type="text" class="billing-contact-name-input" value="${feeEarner.billingContactName}" 
-             placeholder="Enter name" ${!isOtherBilling ? "disabled" : ""}>
-    </td>
-    <td class="${!isOtherBilling ? "disabled-field" : ""}">
-      <input type="email" class="billing-contact-email-input" value="${feeEarner.billingContactEmail}" 
-             placeholder="Enter email" ${!isOtherBilling ? "disabled" : ""}>
-    </td>
-    <td>
-      <button type="button" class="remove-fee-earner" onclick="removeFeeEarnerRow(this)">Remove</button>
-    </td>
+    <td><button type="button" onclick="removeFeeEarnerRow(this)">Remove</button></td>
   `;
 
   tbody.appendChild(row);
-
-  // Add event listener for billing contact change
-  const billingContactSelect = row.querySelector(".billing-contact-select");
-  billingContactSelect?.addEventListener("change", handleBillingContactChange);
-
-  // Add event listeners for duplicate detection and default management
-  const nameInput = row.querySelector(".name-input");
-  const useAsDefaultCheckbox = row.querySelector(".use-as-default-checkbox");
-
-  nameInput?.addEventListener("input", () => detectDuplicateNames());
-  useAsDefaultCheckbox?.addEventListener("change", (event) =>
-    handleDefaultCheckboxChange(event, row)
-  );
-
-  // Ensure scroll container can scroll to the beginning
-  resetTableScroll();
+  detectDuplicateNames();
 }
 
 function removeFeeEarnerRow(button: HTMLButtonElement) {
   const row = button.closest("tr");
   if (row) {
     row.remove();
-    // Re-run duplicate detection after removal
-    setTimeout(() => detectDuplicateNames(), 50);
+    detectDuplicateNames(); // Refresh after removal
   }
 }
 
-function handleBillingContactChange(event: Event) {
-  const select = event.target as HTMLSelectElement;
-  const row = select.closest("tr");
+function updateBillingFields(roleInput: HTMLInputElement) {
+  const row = roleInput.closest("tr");
   if (!row) return;
 
-  const isOther = select.value === "Other";
-  const billingNameCell = row.children[6] as HTMLTableCellElement;
-  const billingEmailCell = row.children[7] as HTMLTableCellElement;
-  const billingNameInput = billingNameCell.querySelector("input") as HTMLInputElement;
-  const billingEmailInput = billingEmailCell.querySelector("input") as HTMLInputElement;
+  const nameInput = row.querySelector(".name-input") as HTMLInputElement;
+  const billingNameInput = row.querySelector(".billing-name-input") as HTMLInputElement;
+  const billingEmailInput = row.querySelector(".billing-email-input") as HTMLInputElement;
+  const billingNameCell = row.querySelector(".billing-name-cell");
+  const billingEmailCell = row.querySelector(".billing-email-cell");
 
-  if (isOther) {
-    // Enable billing contact fields
+  const role = roleInput.value.trim();
+  const name = nameInput.value.trim();
+
+  if (role && name) {
+    // Enable billing fields
     billingNameCell.classList.remove("disabled-field");
     billingEmailCell.classList.remove("disabled-field");
     billingNameInput.disabled = false;
     billingEmailInput.disabled = false;
+
+    // Auto-generate billing name and email if empty
+    if (!billingNameInput.value.trim()) {
+      billingNameInput.value = `${name} (${role})`;
+    }
+    if (!billingEmailInput.value.trim()) {
+      const emailName = name.toLowerCase().replace(/\s+/g, ".");
+      const roleShort = role.toLowerCase().replace(/\s+/g, "");
+      billingEmailInput.value = `${emailName}.${roleShort}@firm.com`;
+    }
   } else {
-    // Disable and clear billing contact fields
+    // Disable billing fields
     billingNameCell.classList.add("disabled-field");
     billingEmailCell.classList.add("disabled-field");
     billingNameInput.disabled = true;
@@ -2199,12 +1642,13 @@ function handleDefaultCheckboxChange(event: Event, currentRow: HTMLTableRowEleme
     const rows = Array.from(tbody.querySelectorAll("tr"));
     rows.forEach((row) => {
       if (row !== currentRow) {
-        const rowNameInput = row.querySelector(".name-input") as HTMLInputElement;
-        if (rowNameInput && rowNameInput.value.trim()) {
-          const rowFirstName = rowNameInput.value.trim().split(" ")[0].toLowerCase();
-          if (rowFirstName === firstName) {
-            const rowCheckbox = row.querySelector(".use-as-default-checkbox") as HTMLInputElement;
-            rowCheckbox.checked = false;
+        const otherNameInput = row.querySelector(".name-input") as HTMLInputElement;
+        const otherCheckbox = row.querySelector(".use-as-default-checkbox") as HTMLInputElement;
+
+        if (otherNameInput && otherNameInput.value.trim()) {
+          const otherFirstName = otherNameInput.value.trim().split(" ")[0].toLowerCase();
+          if (otherFirstName === firstName) {
+            otherCheckbox.checked = false;
           }
         }
       }
@@ -2212,580 +1656,12 @@ function handleDefaultCheckboxChange(event: Event, currentRow: HTMLTableRowEleme
   }
 }
 
-// Stage 3: Core Name Matching Logic
-function applyNameStandardisationRule(
-  worksheetData: any[],
-  feeEarners: FeeEarner[],
-  ruleConfig: NameStandardisationRule
-): any[] {
-  if (!ruleConfig.enabled || feeEarners.length === 0) {
-    return worksheetData;
-  }
-
-  const processedData = [...worksheetData];
-
-  processedData.forEach((row, rowIndex) => {
-    // Find the source narrative column (Original Narrative or Narrative)
-    const sourceNarrativeKey = findSourceNarrativeColumn(row);
-    if (!sourceNarrativeKey) return;
-
-    const narrativeText = row[sourceNarrativeKey];
-    if (!narrativeText || typeof narrativeText !== "string") return;
-
-    // Process the narrative text for name standardisation
-    const processedText = processNarrativeForNames(
-      narrativeText,
-      feeEarners,
-      ruleConfig,
-      row.Date || row.date || null // Try to get date for matching
-    );
-
-    // Only update the amended narrative column if changes were made
-    const amendedColumnKey = getOrCreateAmendedNarrativeColumn(row);
-    if (amendedColumnKey && processedText !== narrativeText) {
-      row[amendedColumnKey] = processedText;
-    }
-  });
-
-  return processedData;
-}
-
-function findSourceNarrativeColumn(row: any): string | null {
-  const keys = Object.keys(row);
-
-  // First, look for "Original Narrative"
-  const originalNarrative = keys.find(
-    (key) => key.toLowerCase().includes("original") && key.toLowerCase().includes("narrative")
-  );
-  if (originalNarrative) return originalNarrative;
-
-  // Then look for just "Narrative" (but not "Amended Narrative")
-  const narrative = keys.find(
-    (key) =>
-      key.toLowerCase().includes("narrative") &&
-      !key.toLowerCase().includes("amended") &&
-      !key.toLowerCase().includes("original")
-  );
-  if (narrative) return narrative;
-
-  // Finally, check for "Description"
-  const description = keys.find((key) => key.toLowerCase().includes("description"));
-  return description || null;
-}
-
-function getOrCreateAmendedNarrativeColumn(row: any): string | null {
-  const keys = Object.keys(row);
-
-  // Look for existing "Amended Narrative" column
-  const amendedColumn = keys.find(
-    (key) => key.toLowerCase().includes("amended") && key.toLowerCase().includes("narrative")
-  );
-
-  if (amendedColumn) {
-    return amendedColumn;
-  }
-
-  // If not found, we'll need to create it - return the expected name
-  return "Amended Narrative";
-}
-
-function processNarrativeForNames(
-  narrativeText: string,
-  feeEarners: FeeEarner[],
-  ruleConfig: NameStandardisationRule,
-  rowDate?: string | Date | null
-): string {
-  if (!narrativeText) return narrativeText;
-
-  let processedText = narrativeText;
-  const excludedNames = ruleConfig.excludedNames.map((name) => name.toLowerCase().trim());
-
-  // Create a map of first names to fee earners for quick lookup
-  const nameMap = createFeeEarnerNameMap(feeEarners, ruleConfig.allowPartialMatches);
-
-  // Process each word in the narrative
-  let hasReplacements = false;
-
-  // Split text but keep track of original spacing and punctuation
-  const wordPattern = /\b(\w+)\b/g;
-  let match;
-
-  while ((match = wordPattern.exec(narrativeText)) !== null) {
-    const word = match[1];
-    const cleanWord = word.toLowerCase();
-
-    // Skip if word is excluded
-    if (excludedNames.includes(cleanWord)) continue;
-
-    // Skip if word is too short to be a meaningful name
-    if (cleanWord.length < 2) continue;
-
-    // Check if this word matches any fee earner names
-    const minLength = ruleConfig.minPartialMatchLength || 3; // Default to 3 if not set
-    let matchingFeeEarners = findMatchingFeeEarners(
-      cleanWord,
-      nameMap,
-      ruleConfig.allowPartialMatches,
-      minLength
-    );
-
-    // If no direct match and nickname database is enabled, check nicknames
-    if (matchingFeeEarners.length === 0 && ruleConfig.useNicknameDatabase !== false) {
-      const expandedName = findNicknameMatch(cleanWord, ruleConfig.customNicknames || {});
-      if (expandedName) {
-        // Try to find fee earners with this expanded name
-        matchingFeeEarners = findMatchingFeeEarners(expandedName, nameMap, false, minLength);
-      }
-    }
-
-    if (matchingFeeEarners.length > 0) {
-      // Determine which fee earner to use
-      const selectedFeeEarner = selectBestFeeEarnerMatch(
-        matchingFeeEarners,
-        rowDate,
-        ruleConfig.useDateMatching
-      );
-
-      if (selectedFeeEarner && selectedFeeEarner.name !== word) {
-        // Check if this word is already part of a full name
-        if (isAlreadyFullName(word, selectedFeeEarner.name, narrativeText, match.index!)) {
-          continue; // Skip replacement if it's already a full name
-        }
-
-        // Replace the first name with the full name
-        if (ruleConfig.replaceOnlyFirstOccurrence && hasReplacements) {
-          // Skip if we've already done a replacement and only first occurrence is enabled
-          continue;
-        }
-
-        // Create a regex that preserves the original case and word boundaries
-        const regex = new RegExp(`\\b${escapeRegExp(word)}\\b`, hasReplacements ? "g" : "");
-        processedText = processedText.replace(regex, selectedFeeEarner.name);
-        hasReplacements = true;
-
-        // If only replacing first occurrence, we can stop after the first replacement
-        if (ruleConfig.replaceOnlyFirstOccurrence) {
-          break;
-        }
-      }
-    }
-  }
-
-  return processedText;
-}
-
-function isAlreadyFullName(
-  foundWord: string,
-  fullName: string,
-  narrativeText: string,
-  wordIndex: number
-): boolean {
-  // Look for any word that follows the found word
-  // Get text starting from after the found word
-  const afterWord = narrativeText.slice(wordIndex + foundWord.length);
-
-  // Use regex to find the next word
-  const nextWordMatch = afterWord.match(/^\s+(\w+)/);
-
-  if (nextWordMatch) {
-    const nextWord = nextWordMatch[1];
-
-    // Check if the next word looks like a surname (capitalized and not obviously not a name)
-    if (isLikelySurname(nextWord)) {
-      return true; // Already appears to be part of a full name, don't replace
-    }
-
-    // Additional check: if the fee earner's name matches exactly what we found
-    const nameParts = fullName.split(/\s+/);
-    if (nameParts.length >= 2) {
-      const firstName = nameParts[0].toLowerCase();
-      const lastName = nameParts[nameParts.length - 1].toLowerCase();
-
-      // Check if found word + next word matches the fee earner's name exactly
-      if (foundWord.toLowerCase() === firstName && nextWord.toLowerCase() === lastName) {
-        return true; // This is exactly the fee earner's full name, don't replace
-      }
-    }
-  }
-
-  return false; // Not a full name, safe to replace
-}
-
-function isLikelySurname(word: string): boolean {
-  // Check if a word is likely to be a surname based on common patterns
-
-  // Must be capitalized (proper noun)
-  if (word[0] !== word[0].toUpperCase()) {
-    return false;
-  }
-
-  // Must be at least 2 characters
-  if (word.length < 2) {
-    return false;
-  }
-
-  // Exclude common words that might be capitalized but aren't surnames
-  const excludedWords = [
-    "THE",
-    "AND",
-    "OR",
-    "BUT",
-    "FOR",
-    "NOR",
-    "SO",
-    "YET",
-    "IN",
-    "ON",
-    "AT",
-    "TO",
-    "FROM",
-    "BY",
-    "WITH",
-    "ABOUT",
-    "MONDAY",
-    "TUESDAY",
-    "WEDNESDAY",
-    "THURSDAY",
-    "FRIDAY",
-    "SATURDAY",
-    "SUNDAY",
-    "JANUARY",
-    "FEBRUARY",
-    "MARCH",
-    "APRIL",
-    "MAY",
-    "JUNE",
-    "JULY",
-    "AUGUST",
-    "SEPTEMBER",
-    "OCTOBER",
-    "NOVEMBER",
-    "DECEMBER",
-    "THIS",
-    "THAT",
-    "THESE",
-    "THOSE",
-    "HIS",
-    "HER",
-    "THEIR",
-    "OUR",
-    "YOUR",
-    "WORKED",
-    "ATTENDED",
-    "REVIEWED",
-    "PREPARED",
-    "DRAFTED",
-    "MEETING",
-    "CALL",
-  ];
-
-  if (excludedWords.includes(word.toUpperCase())) {
-    return false;
-  }
-
-  // If it passes these tests, it's likely a surname
-  return true;
-}
-
-function findNicknameMatch(
-  searchWord: string,
-  customNicknames: Record<string, string>
-): string | null {
-  const lowerSearchWord = searchWord.toLowerCase();
-
-  // Check custom nicknames first (they override defaults)
-  if (customNicknames[lowerSearchWord]) {
-    return customNicknames[lowerSearchWord];
-  }
-
-  // Check built-in nickname database
-  if (DEFAULT_NICKNAMES[lowerSearchWord]) {
-    return DEFAULT_NICKNAMES[lowerSearchWord];
-  }
-
-  return null;
-}
-
-function createFeeEarnerNameMap(
-  feeEarners: FeeEarner[],
-  allowPartialMatches: boolean
-): Map<string, FeeEarner[]> {
-  const nameMap = new Map<string, FeeEarner[]>();
-
-  feeEarners.forEach((feeEarner) => {
-    if (!feeEarner.name) return;
-
-    const names = feeEarner.name.split(/\s+/);
-    const firstName = names[0].toLowerCase();
-
-    // Add the first name to the map
-    if (!nameMap.has(firstName)) {
-      nameMap.set(firstName, []);
-    }
-    nameMap.get(firstName)!.push(feeEarner);
-
-    // If partial matches are allowed, also add name variations
-    if (allowPartialMatches && feeEarner.nameVariations) {
-      feeEarner.nameVariations.forEach((variation) => {
-        const variationKey = variation.toLowerCase().trim();
-        if (!nameMap.has(variationKey)) {
-          nameMap.set(variationKey, []);
-        }
-        nameMap.get(variationKey)!.push(feeEarner);
-      });
-    }
-  });
-
-  return nameMap;
-}
-
-function findMatchingFeeEarners(
-  searchName: string,
-  nameMap: Map<string, FeeEarner[]>,
-  allowPartialMatches: boolean,
-  minPartialMatchLength: number = 3
-): FeeEarner[] {
-  // Direct match
-  if (nameMap.has(searchName)) {
-    return nameMap.get(searchName)!;
-  }
-
-  // Partial matching if enabled
-  if (allowPartialMatches) {
-    const matches: FeeEarner[] = [];
-    const uniqueFeeEarners = new Set<FeeEarner>();
-
-    nameMap.forEach((feeEarners, mappedName) => {
-      // For partial matching, we want to be more careful:
-      // 1. Both names should meet minimum length requirement
-      // 2. Only match prefixes, not arbitrary substrings
-
-      if (
-        searchName.length >= minPartialMatchLength &&
-        mappedName.length >= minPartialMatchLength
-      ) {
-        // Check if search name is a prefix of mapped name (e.g., "John" matches "Johnny")
-        if (mappedName.startsWith(searchName)) {
-          feeEarners.forEach((fe) => uniqueFeeEarners.add(fe));
-        }
-        // Check if mapped name is a prefix of search name (e.g., "Johnny" typed, "John" in system)
-        else if (searchName.startsWith(mappedName)) {
-          feeEarners.forEach((fe) => uniqueFeeEarners.add(fe));
-        }
-      }
-    });
-
-    return Array.from(uniqueFeeEarners);
-  }
-
-  return [];
-}
-
-function selectBestFeeEarnerMatch(
-  matchingFeeEarners: FeeEarner[],
-  rowDate: string | Date | null,
-  useDateMatching: boolean
-): FeeEarner | null {
-  if (matchingFeeEarners.length === 0) return null;
-  if (matchingFeeEarners.length === 1) return matchingFeeEarners[0];
-
-  // If date matching is enabled and we have a date, try to find the best match
-  if (useDateMatching && rowDate) {
-    const parsedRowDate = parseDate(rowDate);
-    if (parsedRowDate) {
-      // Try to find a fee earner with a matching date within ±5 days
-      const dateMatchedFeeEarner = findFeeEarnerByDateRange(matchingFeeEarners, parsedRowDate, 5);
-      if (dateMatchedFeeEarner) {
-        return dateMatchedFeeEarner;
-      }
-    }
-  }
-
-  // Find the fee earner marked as default for this name group
-  const defaultFeeEarner = matchingFeeEarners.find((fe) => fe.isDefaultForName);
-  if (defaultFeeEarner) return defaultFeeEarner;
-
-  // Fall back to the first one if no default is set
-  return matchingFeeEarners[0];
-}
-
-function findFeeEarnerByDateRange(
-  feeEarners: FeeEarner[],
-  targetDate: Date,
-  daysTolerance: number
-): FeeEarner | null {
-  // In a full implementation, this would check against fee earner assignment dates
-  // stored in the fee earner records or a separate tracking system
-
-  // For now, we'll implement a placeholder that could be extended
-  // to check against actual date records when that functionality is added
-
-  const targetTime = targetDate.getTime();
-  const toleranceMs = daysTolerance * 24 * 60 * 60 * 1000; // Convert days to milliseconds
-
-  for (const feeEarner of feeEarners) {
-    // Placeholder: In a real implementation, this would check against
-    // stored dates for when each fee earner was assigned to work
-    // For now, we'll return null to fall back to default logic
-    // Future enhancement: Check feeEarner.assignmentDates or similar
-    // if (feeEarner.assignmentDates) {
-    //   for (const assignmentDate of feeEarner.assignmentDates) {
-    //     const assignmentTime = parseDate(assignmentDate)?.getTime();
-    //     if (assignmentTime && Math.abs(targetTime - assignmentTime) <= toleranceMs) {
-    //       return feeEarner;
-    //     }
-    //   }
-    // }
-  }
-
-  return null; // No date-based match found, fall back to default logic
-}
-
-
-function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-// Apply name standardisation rules to the current worksheet
-async function applyNameStandardisationToWorksheet() {
-  try {
-    // Get current matter and its rules
-    const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
-    if (!selectedMatter) {
-      showMessage(
-        "Please select a matter profile before applying name standardisation rules.",
-        "error"
-      );
-      return;
-    }
-
-    const profiles = getMatterProfiles();
-    const currentProfile = profiles.find((p) => p.name === selectedMatter);
-    if (!currentProfile || !currentProfile.rules) {
-      showMessage("No rules found for the selected matter profile.", "error");
-      return;
-    }
-
-    const nameRule = currentProfile.rules.nameStandardisation;
-    if (!nameRule.enabled) {
-      showMessage("Name standardisation rule is not enabled for this matter.", "info");
-      return;
-    }
-
-    const feeEarners = currentProfile.feeEarners || [];
-    if (feeEarners.length === 0) {
-      showMessage("No fee earners found for this matter. Please add fee earners first.", "error");
-      return;
-    }
-
-    await Excel.run(async (context) => {
+function updateFeeEarnersFromSpreadsheet() {
+  Excel.run(async (context) => {
+    try {
       const worksheet = context.workbook.worksheets.getActiveWorksheet();
       const usedRange = worksheet.getUsedRange();
-
-      if (!usedRange) {
-        showMessage("No data found in the worksheet to process.", "error");
-        return;
-      }
-
-      usedRange.load(["values", "formulas", "rowCount", "columnCount"]);
-      await context.sync();
-
-      // Convert Excel data to a workable format
-      const headers = usedRange.values[0] as string[];
-      const worksheetData: any[] = [];
-
-      for (let i = 1; i < usedRange.values.length; i++) {
-        const row = usedRange.values[i];
-        const rowData: any = {};
-
-        headers.forEach((header, colIndex) => {
-          rowData[header] = row[colIndex];
-        });
-
-        worksheetData.push(rowData);
-      }
-
-      // Apply name standardisation rules
-      const processedData = applyNameStandardisationRule(worksheetData, feeEarners, nameRule);
-
-      // Update the worksheet with processed data
-      let updatedCount = 0;
-
-      // First check if "Amended Narrative" column exists
-      let amendedNarrativeCol = headers.findIndex(
-        (h) => h.toLowerCase().includes("amended") && h.toLowerCase().includes("narrative")
-      );
-
-      // If column doesn't exist, we need to check if we need to create it
-      const needsAmendedColumn =
-        amendedNarrativeCol < 0 &&
-        processedData.some((row) => row["Amended Narrative"] !== undefined);
-
-      if (needsAmendedColumn) {
-        // We'll need to add the column after the source narrative column
-        const sourceCol = headers.findIndex(
-          (h) =>
-            (h.toLowerCase().includes("original") && h.toLowerCase().includes("narrative")) ||
-            (h.toLowerCase().includes("narrative") && !h.toLowerCase().includes("amended"))
-        );
-
-        if (sourceCol >= 0) {
-          // Insert new column after the source narrative column
-          const insertCol = sourceCol + 1;
-          const newColumn = worksheet.getCell(0, insertCol).getEntireColumn();
-          newColumn.insert(Excel.InsertShiftDirection.right);
-
-          // Set the header for the new column
-          const headerCell = worksheet.getCell(0, insertCol);
-          headerCell.values = [["Amended Narrative"]];
-
-          // Update our tracking
-          amendedNarrativeCol = insertCol;
-          headers.splice(insertCol, 0, "Amended Narrative");
-
-          await context.sync();
-        }
-      }
-
-      // Now update the data
-      for (let i = 0; i < processedData.length; i++) {
-        const processedRow = processedData[i];
-        const amendedValue = processedRow["Amended Narrative"];
-
-        if (amendedValue !== undefined && amendedNarrativeCol >= 0) {
-          // Update the cell in Excel (i+1 because row 0 is headers)
-          const cell = worksheet.getCell(i + 1, amendedNarrativeCol);
-          cell.values = [[amendedValue]];
-          updatedCount++;
-        }
-      }
-
-      await context.sync();
-
-      if (updatedCount > 0) {
-        showMessage(
-          `Name standardisation applied successfully. Updated ${updatedCount} rows.`,
-          "success"
-        );
-      } else {
-        showMessage("Name standardisation completed, but no changes were needed.", "info");
-      }
-    });
-  } catch (error) {
-    console.error("Error applying name standardisation:", error);
-    showMessage("An error occurred while applying name standardisation: " + error.message, "error");
-  }
-}
-
-async function updateFeeEarnersFromSpreadsheet() {
-  try {
-    await Excel.run(async (context) => {
-      // Get the active worksheet
-      const worksheet = context.workbook.worksheets.getActiveWorksheet();
-
-      // Get the used range
-      const usedRange = worksheet.getUsedRange();
-      usedRange.load(["rowCount", "columnCount", "values"]);
+      usedRange.load(["values"]);
 
       await context.sync();
 
@@ -2794,103 +1670,88 @@ async function updateFeeEarnersFromSpreadsheet() {
         return;
       }
 
-      const headerRow = usedRange.values[0];
-      const nameColumnIndex = findNameColumn(headerRow);
-      const roleColumnIndex = findRoleColumn(headerRow);
-      const rateColumnIndex = findRateColumn(headerRow);
+      const values = usedRange.values;
+      const headers = values[0] as string[];
 
-      if (nameColumnIndex === -1) {
-        showMessage("No Name column found in the spreadsheet.", "error");
+      // Find the name column
+      const nameCol = headers.findIndex((h) => h && h.toLowerCase() === "name");
+
+      if (nameCol === -1) {
+        showMessage("Name column not found in the spreadsheet.", "error");
         return;
       }
 
-      // Extract unique fee earner combinations
-      const uniqueFeeEarners = new Map<string, FeeEarner>();
-
-      // Start from row 1 (skip header row)
-      for (let row = 1; row < usedRange.rowCount; row++) {
-        const nameValue = usedRange.values[row][nameColumnIndex];
-        const roleValue = roleColumnIndex !== -1 ? usedRange.values[row][roleColumnIndex] : "";
-        const rateValue = rateColumnIndex !== -1 ? usedRange.values[row][rateColumnIndex] : "";
-
-        if (nameValue && nameValue.toString().trim()) {
-          const name = nameValue.toString().trim();
-          const role = roleValue ? roleValue.toString().trim() : "";
-          const rate = rateValue ? parseFloat(rateValue.toString()) || 0 : 0;
-
-          // Create a unique key for this combination
-          const key = `${name}-${role}-${rate}`;
-
-          if (!uniqueFeeEarners.has(key)) {
-            uniqueFeeEarners.set(key, {
-              name: name,
-              role: role,
-              rate: rate,
-              email: "", // Will be manually filled
-              billingContact: "Fee Earner", // Default
-              billingContactName: "",
-              billingContactEmail: "",
-            });
-          }
+      // Extract unique names
+      const uniqueNames = new Set<string>();
+      for (let i = 1; i < values.length; i++) {
+        const name = values[i][nameCol];
+        if (name && typeof name === "string" && name.trim()) {
+          uniqueNames.add(name.trim());
         }
       }
 
-      // Update the fee earners table with found data
-      const feeEarners = Array.from(uniqueFeeEarners.values());
+      // Get current fee earners to preserve existing data
+      const currentFeeEarners = getFeeEarnersFromForm();
+      const currentFeeEarnerMap = new Map<string, FeeEarner>();
+      currentFeeEarners.forEach((fe) => {
+        currentFeeEarnerMap.set(fe.name.toLowerCase(), fe);
+      });
 
-      if (feeEarners.length > 0) {
-        loadFeeEarnersTable(feeEarners);
+      // Build updated fee earner list
+      const updatedFeeEarners: FeeEarner[] = [];
+      uniqueNames.forEach((name) => {
+        const existing = currentFeeEarnerMap.get(name.toLowerCase());
+        if (existing) {
+          // Keep existing data
+          updatedFeeEarners.push(existing);
+        } else {
+          // Add new fee earner with default values
+          updatedFeeEarners.push({
+            name: name,
+            role: "",
+            rate: 0,
+            billing_name: "",
+            billing_email: "",
+            useAsDefault: false,
+          });
+        }
+      });
 
-        const foundColumns = [];
-        if (nameColumnIndex !== -1) foundColumns.push("Name");
-        if (roleColumnIndex !== -1) foundColumns.push("Role");
-        if (rateColumnIndex !== -1) foundColumns.push("Rate");
+      // Update the form
+      loadFeeEarnersIntoForm(updatedFeeEarners);
+      resetTableScroll();
 
-        showMessage(
-          `Found ${feeEarners.length} unique fee earner${feeEarners.length > 1 ? "s" : ""} from ${foundColumns.join(", ")} column${foundColumns.length > 1 ? "s" : ""}. Please fill in missing information manually.`,
-          "success"
-        );
-      } else {
-        showMessage("No fee earners found in the spreadsheet data.", "warning");
-      }
-    });
-  } catch (error) {
-    console.error(error);
-    showMessage("An error occurred while scanning the spreadsheet: " + error.message, "error");
-  }
+      showMessage(
+        `Updated fee earners list. Found ${uniqueNames.size} unique names in the spreadsheet.`,
+        "success"
+      );
+      addDebugInfo(`Extracted ${uniqueNames.size} unique names from Name column`);
+    } catch (error) {
+      console.error("Error updating fee earners from spreadsheet:", error);
+      showMessage("Error reading from spreadsheet: " + error.message, "error");
+    }
+  });
 }
 
 function saveParticipants() {
   const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
 
   if (!selectedMatter) {
-    showMessage("Please select a matter from the dropdown to save participants to.", "error");
+    showMessage("Please select a matter profile to save participants to.", "error");
     return;
   }
 
-  // Get current fee earners from the table
-  const currentFeeEarners = getCurrentFeeEarners();
-
-  // Filter out completely empty rows
-  const validFeeEarners = currentFeeEarners.filter(
-    (feeEarner) =>
-      feeEarner.name.trim() !== "" ||
-      feeEarner.role.trim() !== "" ||
-      feeEarner.rate > 0 ||
-      feeEarner.email.trim() !== ""
-  );
-
-  // Get existing matter profiles
   const profiles = getMatterProfiles();
   const existingIndex = profiles.findIndex((p) => p.name === selectedMatter);
 
   if (existingIndex >= 0) {
     // Update the existing profile with new fee earners data
-    profiles[existingIndex].feeEarners = validFeeEarners;
+    profiles[existingIndex].feeEarners = getFeeEarnersFromForm();
     saveMatterProfiles(profiles);
 
+    const feeEarnerCount = profiles[existingIndex].feeEarners.length;
     showMessage(
-      `Successfully saved ${validFeeEarners.length} fee earner${validFeeEarners.length !== 1 ? "s" : ""} to matter profile "${selectedMatter}".`,
+      `Successfully saved ${feeEarnerCount} fee earner${feeEarnerCount !== 1 ? "s" : ""} to matter profile "${selectedMatter}".`,
       "success"
     );
   } else {
@@ -2898,172 +1759,28 @@ function saveParticipants() {
   }
 }
 
-// Nickname Database Management
-function addNicknameEntry() {
-  const nicknameList = document.getElementById("nickname-list");
-  if (!nicknameList) return;
+// Rules functionality
 
-  const entry = createNicknameEntry("", "", false);
-  nicknameList.appendChild(entry);
+let missingTimeRowMapping: Map<string, number> = new Map();
 
-  // Focus the first input in the new entry
-  const firstInput = entry.querySelector("input");
-  if (firstInput) {
-    firstInput.focus();
-  }
+function clearMissingTimeRowTracking() {
+  missingTimeRowMapping.clear();
 }
 
-function createNicknameEntry(
-  nickname: string,
-  fullName: string,
-  isBuiltIn: boolean = false
-): HTMLElement {
-  const entry = document.createElement("div");
-  entry.className = `nickname-entry ${isBuiltIn ? "built-in" : ""}`;
-
-  entry.innerHTML = `
-    <input type="text" class="nickname-input" value="${nickname}" placeholder="Nickname" ${isBuiltIn ? "readonly" : ""}>
-    <span class="nickname-arrow">→</span>
-    <input type="text" class="fullname-input" value="${fullName}" placeholder="Full Name" ${isBuiltIn ? "readonly" : ""}>
-    <button type="button" class="nickname-remove" onclick="removeNicknameEntry(this)">
-      ${isBuiltIn ? "Hide" : "Remove"}
-    </button>
-  `;
-
-  return entry;
-}
-
-function removeNicknameEntry(button: HTMLButtonElement) {
-  const entry = button.closest(".nickname-entry");
-  if (entry) {
-    entry.remove();
-  }
-}
-
-function resetNicknamesToDefault() {
-  loadNicknameDatabase(DEFAULT_NICKNAMES);
-}
-
-function loadNicknameDatabase(nicknames: Record<string, string>) {
-  const nicknameList = document.getElementById("nickname-list");
-  if (!nicknameList) return;
-
-  nicknameList.innerHTML = "";
-
-  // Add built-in nicknames (read-only) - sorted alphabetically by nickname
-  const sortedBuiltInNicknames = Object.entries(DEFAULT_NICKNAMES).sort(
-    ([nicknameA], [nicknameB]) => nicknameA.toLowerCase().localeCompare(nicknameB.toLowerCase())
-  );
-
-  sortedBuiltInNicknames.forEach(([nickname, fullName]) => {
-    const entry = createNicknameEntry(nickname, fullName, true);
-    nicknameList.appendChild(entry);
-  });
-
-  // Add custom nicknames (editable) - sorted alphabetically by nickname
-  const sortedCustomNicknames = Object.entries(nicknames)
-    .filter(([nickname]) => !DEFAULT_NICKNAMES[nickname])
-    .sort(([nicknameA], [nicknameB]) =>
-      nicknameA.toLowerCase().localeCompare(nicknameB.toLowerCase())
-    );
-
-  sortedCustomNicknames.forEach(([nickname, fullName]) => {
-    const entry = createNicknameEntry(nickname, fullName, false);
-    nicknameList.appendChild(entry);
-  });
-}
-
-function getCurrentNicknames(): Record<string, string> {
-  const nicknames: Record<string, string> = {};
-  const nicknameList = document.getElementById("nickname-list");
-
-  if (nicknameList) {
-    const entries = nicknameList.querySelectorAll(".nickname-entry");
-    entries.forEach((entry) => {
-      const nicknameInput = entry.querySelector(".nickname-input") as HTMLInputElement;
-      const fullNameInput = entry.querySelector(".fullname-input") as HTMLInputElement;
-
-      if (
-        nicknameInput &&
-        fullNameInput &&
-        nicknameInput.value.trim() &&
-        fullNameInput.value.trim()
-      ) {
-        nicknames[nicknameInput.value.trim().toLowerCase()] = fullNameInput.value
-          .trim()
-          .toLowerCase();
-      }
-    });
-  }
-
-  return nicknames;
-}
-
-// Undo and Auto-Apply Functionality
-async function undoNameStandardisation() {
-  if (!lastUndoSnapshot) {
-    showMessage("No changes to undo.", "info");
-    return;
-  }
-
-  try {
-    await Excel.run(async (context) => {
-      const worksheet = context.workbook.worksheets.getActiveWorksheet();
-
-      // Restore all changed values
-      for (const change of lastUndoSnapshot.changes) {
-        const cell = worksheet.getCell(change.row, change.column);
-        cell.values = [[change.oldValue]];
-      }
-
-      await context.sync();
-
-      showMessage(
-        `Undid ${lastUndoSnapshot.changes.length} changes from name standardisation.`,
-        "success"
-      );
-
-      // Clear the undo snapshot and disable undo button
-      lastUndoSnapshot = null;
-      updateUndoButtonState();
-    });
-  } catch (error) {
-    console.error("Error undoing changes:", error);
-    showMessage("An error occurred while undoing changes: " + error.message, "error");
-  }
-}
-
-function updateUndoButtonState() {
-  const undoButton = document.getElementById("undo-name-rules") as HTMLElement;
-  if (undoButton) {
-    if (lastUndoSnapshot) {
-      undoButton.removeAttribute("disabled");
-      undoButton.style.opacity = "1";
-      undoButton.style.cursor = "pointer";
-    } else {
-      undoButton.setAttribute("disabled", "true");
-      undoButton.style.opacity = "0.5";
-      undoButton.style.cursor = "not-allowed";
-    }
-  }
-}
-
-// Apply all enabled rules
 async function applyAllRules() {
   try {
     // Clear any previous Missing Time row tracking
     clearMissingTimeRowTracking();
-    
+
     // Clear debug info before starting
     clearDebugInfo();
-    
+
     // Get current matter and its rules
     const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
     if (!selectedMatter) {
       showMessage("Please select a matter profile before applying rules.", "error");
       return;
     }
-
     const profiles = getMatterProfiles();
     const currentProfile = profiles.find((p) => p.name === selectedMatter);
     if (!currentProfile || !currentProfile.rules) {
@@ -3071,27 +1788,16 @@ async function applyAllRules() {
       return;
     }
 
-    // DEBUG: Show what rules are enabled
-    const timeFormatEnabled = currentProfile.rules.timeFormat?.enabled || false;
-    const nameStandardisationEnabled = currentProfile.rules.nameStandardisation?.enabled || false;
-    const missingTimeEnabled = currentProfile.rules.missingTimeEntries?.enabled || false;
-
-
-    let appliedRules = [];
+    const appliedRules: string[] = [];
     let totalUpdatedRows = 0;
-    let allDebugInfo: string[] = [];
 
-    // Apply TimeFormat Rule if enabled (runs first)
+    // Apply TimeFormat Rule if enabled
     if (currentProfile.rules.timeFormat?.enabled) {
       showMessage("Applying TimeFormat rule...", "info");
-
       const result = await applyTimeFormatRuleWithResult();
       if (result.success) {
-        appliedRules.push(`TimeFormat (from ${result.sourceColumn})`);
+        appliedRules.push("TimeFormat");
         totalUpdatedRows += result.updatedRows;
-        if (result.debugInfo) {
-          allDebugInfo.push(result.debugInfo);
-        }
       } else if (result.error) {
         showMessage(`TimeFormat failed: ${result.error}`, "error");
         return;
@@ -3101,7 +1807,6 @@ async function applyAllRules() {
     // Apply Name Standardisation Rule if enabled
     if (currentProfile.rules.nameStandardisation?.enabled) {
       showMessage("Applying Name Standardisation rule...", "info");
-
       const result = await applyNameStandardisationRuleWithResult();
       if (result.success) {
         appliedRules.push("Name Standardisation");
@@ -3115,38 +1820,29 @@ async function applyAllRules() {
     // Apply Missing Time Entries Rule if enabled
     if (currentProfile.rules.missingTimeEntries?.enabled) {
       showMessage("Applying Missing Time Entries rule...", "info");
-
       const result = await applyMissingTimeEntriesRuleWithResult();
-
       if (result.success) {
         appliedRules.push("Missing Time Entries");
         totalUpdatedRows += result.updatedRows;
-        showMessage(`Missing Time Entries completed: ${result.updatedRows} rows updated`, "info");
       } else if (result.error) {
         showMessage(`Missing Time Entries failed: ${result.error}`, "error");
         return;
       }
-    } else {
-      showMessage("Missing Time Entries rule is disabled - skipping", "info");
     }
 
     // Apply NeedsDetail Rule if enabled
     if (currentProfile.rules.needsDetail?.enabled) {
       showMessage("Applying NeedsDetail rule...", "info");
-
       const result = await applyNeedsDetailRuleWithResult();
       if (result.success) {
         appliedRules.push("NeedsDetail");
         totalUpdatedRows += result.updatedRows;
-        if (result.debugInfo) {
-          allDebugInfo.push(result.debugInfo);
-        }
       } else if (result.error) {
         showMessage(`NeedsDetail failed: ${result.error}`, "error");
         return;
       }
     }
-    
+
     // Apply Travel Rule if enabled
     if (currentProfile.rules.travel?.enabled) {
       showMessage("Applying Travel rule...", "info");
@@ -3159,7 +1855,20 @@ async function applyAllRules() {
         return;
       }
     }
-    
+
+    // Apply Max Daily Hours Rule if enabled
+    if (currentProfile.rules.maxDailyHours?.enabled) {
+      showMessage("Applying Max Daily Hours rule...", "info");
+      const result = await applyMaxDailyHoursRuleWithResult();
+      if (result.success) {
+        appliedRules.push("Max Daily Hours");
+        totalUpdatedRows += result.updatedRows;
+      } else if (result.error) {
+        showMessage(`Max Daily Hours failed: ${result.error}`, "error");
+        return;
+      }
+    }
+
     // Apply Non Chargeable Rule if enabled
     if (currentProfile.rules.nonChargeable?.enabled) {
       showMessage("Applying Non Chargeable rule...", "info");
@@ -3175,1714 +1884,20 @@ async function applyAllRules() {
 
     // Show final result and re-apply formatting
     if (appliedRules.length > 0) {
-
-      // Recalculate column widths for content-sensitive columns
-      await recalculateColumnWidths(currentProfile);
-
-      const rulesText = appliedRules.join(", ");
-      
-      // If we have debug info, show it in the debug area
-      if (allDebugInfo.length > 0) {
-        allDebugInfo.forEach(info => addDebugInfo(info));
-      }
-      
-      // Re-apply formatting as final step
-      showMessage("Re-applying formatting...", "info");
-      await applyFormatting();
-      
-      // Always show success message
       showMessage(
-        `Successfully applied ${rulesText}. Updated ${totalUpdatedRows} rows total. Formatting re-applied. Undo is available.`,
+        `Successfully applied ${appliedRules.length} rule${appliedRules.length !== 1 ? "s" : ""}: ${appliedRules.join(", ")}. Updated ${totalUpdatedRows} row${totalUpdatedRows !== 1 ? "s" : ""}.`,
         "success"
       );
+
+      // Re-apply formatting after rule changes
+      await formatSpreadsheet();
+      await colorCodeRows();
     } else {
-      showMessage("No rules were enabled for this matter profile.", "info");
+      showMessage("No rules were enabled or applied.", "info");
     }
   } catch (error) {
     console.error("Error applying rules:", error);
-    showMessage("An error occurred while applying rules: " + error.message, "error");
-  }
-}
-
-
-// Global variable to track rows with Missing Time formatting (for priority handling)
-let missingTimeRows: Set<number> = new Set();
-
-// Helper function to clear Missing Time row tracking
-function clearMissingTimeRowTracking() {
-  missingTimeRows.clear();
-}
-
-// Helper function to recalculate column widths for content-sensitive columns
-async function recalculateColumnWidths(currentProfile: any) {
-  try {
-    await Excel.run(async (context) => {
-      const worksheet = context.workbook.worksheets.getActiveWorksheet();
-      const usedRange = worksheet.getUsedRange();
-      
-      if (!usedRange) {
-        return;
-      }
-      
-      usedRange.load(["values", "columnCount"]);
-      await context.sync();
-      
-      const headers = usedRange.values[0] as string[];
-      const maxColumnWidth = currentProfile.maxColumnWidth || 300;
-      
-      // Find columns that need width recalculation
-      const columnsToRecalculate = [];
-      
-      for (let col = 0; col < headers.length; col++) {
-        const header = headers[col]?.toString().toLowerCase() || "";
-        
-        // Check for Amended Narrative, Amended Time, or Notes columns
-        if (header.includes("amended narrative") || 
-            header.includes("amended time") || 
-            header.includes("notes")) {
-          columnsToRecalculate.push({
-            index: col,
-            name: headers[col]
-          });
-        }
-      }
-      
-      // Recalculate width for each identified column
-      for (const col of columnsToRecalculate) {
-        const column = worksheet.getCell(0, col.index).getEntireColumn();
-        
-        // Auto-fit to content first
-        column.format.autofitColumns();
-        await context.sync();
-        
-        // Apply max width constraint if needed
-        column.load("format/columnWidth");
-        await context.sync();
-        
-        if (column.format.columnWidth > maxColumnWidth) {
-          column.format.columnWidth = maxColumnWidth;
-          column.format.wrapText = true;
-        }
-      }
-      
-      await context.sync();
-    });
-  } catch (error) {
-    console.error("Error recalculating column widths:", error);
-    // Don't throw error to avoid breaking the main rule application flow
-  }
-}
-
-// Helper function to apply Name Standardisation and return result
-async function applyNeedsDetailRuleWithResult(): Promise<{
-  success: boolean;
-  updatedRows: number;
-  error?: string;
-  debugInfo?: string;
-}> {
-  try {
-    // Get current matter and its rules
-    const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
-    if (!selectedMatter) {
-      return { success: false, updatedRows: 0, error: "No matter selected" };
-    }
-
-    const profiles = getMatterProfiles();
-    const currentProfile = profiles.find((p) => p.name === selectedMatter);
-    if (!currentProfile || !currentProfile.rules || !currentProfile.rules.needsDetail) {
-      return { success: false, updatedRows: 0, error: "NeedsDetail rule not configured" };
-    }
-
-    const needsDetailRule = currentProfile.rules.needsDetail;
-    
-    return await Excel.run(async (context) => {
-      const worksheet = context.workbook.worksheets.getActiveWorksheet();
-      const usedRange = worksheet.getUsedRange();
-      usedRange.load("values");
-      
-      await context.sync();
-      
-      if (!usedRange.values || usedRange.values.length === 0) {
-        return { success: false, updatedRows: 0, error: "No data found in worksheet" };
-      }
-      
-      const values = usedRange.values;
-      const headers = values[0];
-      
-      
-      // Find required columns - look for "Original Narrative" first, then "Narrative"
-      let narrativeIndex = headers.findIndex((h) => 
-        h?.toString().toLowerCase() === "original narrative"
-      );
-      
-      // If "Original Narrative" not found, try just "Narrative"
-      if (narrativeIndex === -1) {
-        narrativeIndex = headers.findIndex((h) => 
-          h?.toString().toLowerCase() === "narrative"
-        );
-      }
-      const chargeIndex = headers.findIndex((h) => h?.toString().toLowerCase() === "charge");
-      let notesIndex = headers.findIndex((h) => h?.toString().toLowerCase() === "notes");
-      
-      if (narrativeIndex === -1) {
-        // Try to find alternative narrative columns
-        const altNarrativeIndex = headers.findIndex((h) => {
-          const headerLower = h?.toString().toLowerCase() || "";
-          return headerLower.includes("description") || 
-                 headerLower.includes("details") || 
-                 headerLower.includes("work") ||
-                 headerLower.includes("task");
-        });
-        
-        if (altNarrativeIndex !== -1) {
-          return { success: false, updatedRows: 0, error: `Narrative column not found. Found possible alternative: "${headers[altNarrativeIndex]}" at index ${altNarrativeIndex}. Headers: ${headersList}` };
-        }
-        return { success: false, updatedRows: 0, error: `Narrative column not found. Available headers: ${headersList}` };
-      }
-      
-      // Create Notes column if it doesn't exist
-      if (notesIndex === -1) {
-        const newColumnIndex = headers.length;
-        const insertRange = worksheet.getCell(0, newColumnIndex);
-        insertRange.values = [["Notes"]];
-        notesIndex = newColumnIndex;
-        headers.push("Notes");
-        await context.sync();
-      }
-      
-      // Create Charge column if it doesn't exist
-      let chargeColumnIndex = chargeIndex;
-      if (chargeIndex === -1) {
-        const newColumnIndex = headers.length;
-        const insertRange = worksheet.getCell(0, newColumnIndex);
-        insertRange.values = [["Charge"]];
-        chargeColumnIndex = newColumnIndex;
-        headers.push("Charge");
-        await context.sync();
-      }
-      
-      let updatedRows = 0;
-      let debugMessages: string[] = [];
-      
-      debugMessages.push(`Narrative column: index ${narrativeIndex} (header: "${headers[narrativeIndex]}")`);
-      debugMessages.push(`Charge column: index ${chargeColumnIndex} (header: "${headers[chargeColumnIndex] || 'CREATED'}")`);
-      debugMessages.push(`Notes column: index ${notesIndex} (header: "${headers[notesIndex] || 'CREATED'}")`);
-      debugMessages.push(`Min word count: ${needsDetailRule.minWordCount}`);
-      debugMessages.push(`Total rows to process: ${values.length - 1}`);
-      debugMessages.push('---');
-      
-      // Process each data row
-      for (let rowIndex = 1; rowIndex < values.length; rowIndex++) {
-        const narrativeValue = values[rowIndex][narrativeIndex];
-        if (!narrativeValue) continue;
-        
-        const narrativeText = narrativeValue.toString().trim();
-        const wordCount = narrativeText.split(/\s+/).filter(word => word.length > 0).length;
-        
-        // Log first 5 rows for debugging
-        if (rowIndex <= 5) {
-          debugMessages.push(`Row ${rowIndex}: "${narrativeText.substring(0, 50)}..." (${wordCount} words)`);
-        }
-        
-        if (wordCount < needsDetailRule.minWordCount) {
-          // Update Charge column to 'Q'
-          if (chargeColumnIndex >= 0) {
-            const chargeCell = worksheet.getCell(rowIndex, chargeColumnIndex);
-            chargeCell.values = [["Q"]];
-          }
-          
-          // Update Notes column
-          const currentNotes = values[rowIndex][notesIndex]?.toString() || "";
-          const newNote = "Needs Detail";
-          const updatedNotes = currentNotes ? `${currentNotes}, ${newNote}` : newNote;
-          
-          const notesCell = worksheet.getCell(rowIndex, notesIndex);
-          notesCell.values = [[updatedNotes]];
-          
-          updatedRows++;
-          
-          // Log when a row is updated
-          if (updatedRows <= 5) {
-            debugMessages.push(`  -> UPDATED Row ${rowIndex}: Set Charge to 'Q', Notes to '${updatedNotes}'`);
-          }
-        }
-      }
-      
-      await context.sync();
-      
-      // Add summary to debug messages
-      debugMessages.push('---');
-      debugMessages.push(`Summary: Updated ${updatedRows} rows that had less than ${needsDetailRule.minWordCount} words`);
-      
-      // Return debug info
-      const debugText = `NeedsDetail Debug:\n${debugMessages.join('\n')}`;
-      
-      return { success: true, updatedRows: updatedRows, debugInfo: debugText };
-    });
-  } catch (error) {
-    return { success: false, updatedRows: 0, error: error.message };
-  }
-}
-
-async function applyTimeFormatRuleWithResult(): Promise<{
-  success: boolean;
-  updatedRows: number;
-  error?: string;
-  sourceColumn?: string;
-  debugInfo?: string;
-}> {
-  try {
-    // Get current matter and its rules
-    const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
-    if (!selectedMatter) {
-      return { success: false, updatedRows: 0, error: "No matter selected" };
-    }
-
-    const profiles = getMatterProfiles();
-    const currentProfile = profiles.find((p) => p.name === selectedMatter);
-    if (!currentProfile || !currentProfile.rules || !currentProfile.rules.timeFormat) {
-      return { success: false, updatedRows: 0, error: "TimeFormat rule not configured" };
-    }
-
-    const timeFormatRule = currentProfile.rules.timeFormat;
-    
-    return await Excel.run(async (context) => {
-      const worksheet = context.workbook.worksheets.getActiveWorksheet();
-      const usedRange = worksheet.getUsedRange();
-      usedRange.load("values");
-      
-      await context.sync();
-      
-      if (!usedRange.values || usedRange.values.length === 0) {
-        return { success: false, updatedRows: 0, error: "No data found in worksheet" };
-      }
-      
-      const values = usedRange.values;
-      const headers = values[0];
-      
-      // Find required columns - check both "Time" and "Original Time"
-      let timeIndex = headers.findIndex((h) => h?.toString().toLowerCase() === "time");
-      let sourceColumnName = "Time";
-      
-      // If "Time" column not found, look for "Original Time" (after formatting has been applied)
-      if (timeIndex === -1) {
-        timeIndex = headers.findIndex((h) => h?.toString().toLowerCase() === "original time");
-        sourceColumnName = "Original Time";
-      }
-      
-      const amendedTimeIndex = headers.findIndex((h) => h?.toString().toLowerCase() === "amended time");
-      let notesIndex = headers.findIndex((h) => h?.toString().toLowerCase() === "notes");
-      
-      if (timeIndex === -1) {
-        return { success: false, updatedRows: 0, error: "Neither 'Time' nor 'Original Time' column found" };
-      }
-      
-      // Create Amended Time column if it doesn't exist
-      if (amendedTimeIndex === -1) {
-        const newColumnIndex = headers.length;
-        const insertRange = worksheet.getCell(0, newColumnIndex);
-        insertRange.values = [["Amended Time"]];
-        amendedTimeIndex = newColumnIndex; // Update the index!
-        
-        // Update headers array
-        headers.push("Amended Time");
-        await context.sync();
-      }
-      
-      // Create Notes column if it doesn't exist
-      if (notesIndex === -1) {
-        const newColumnIndex = headers.length;
-        const insertRange = worksheet.getCell(0, newColumnIndex);
-        insertRange.values = [["Notes"]];
-        notesIndex = newColumnIndex;
-        
-        // Update headers array
-        headers.push("Notes");
-      }
-      
-      let updatedRows = 0;
-      let debugMessages: string[] = [];
-      
-      // DEBUG: Log column information
-      debugMessages.push(`Source: ${sourceColumnName} (index ${timeIndex})`);
-      debugMessages.push(`Amended Time at index ${amendedTimeIndex}`);
-      debugMessages.push(`Output: ${timeFormatRule.outputFormat}, 6min rounding: ${timeFormatRule.roundToSixMinutes ? 'ON' : 'OFF'}`);
-      debugMessages.push('---');
-      
-      // Format the entire Amended Time column appropriately
-      const amendedTimeColumn = worksheet.getCell(0, amendedTimeIndex).getEntireColumn();
-      if (timeFormatRule.outputFormat === "HH:MM") {
-        amendedTimeColumn.numberFormat = "@"; // Text format for HH:MM
-      } else {
-        amendedTimeColumn.numberFormat = "0.0"; // Number format with 1 decimal place for X.Y
-      }
-      await context.sync();
-      
-      // Process each data row
-      for (let rowIndex = 1; rowIndex < values.length; rowIndex++) {
-        const timeValue = values[rowIndex][timeIndex];
-        if (!timeValue) continue;
-        
-        const timeString = timeValue.toString();
-        
-        const convertedTime = convertTimeFormat(
-          timeString,
-          timeFormatRule.outputFormat,
-          timeFormatRule.roundToSixMinutes,
-          rowIndex <= 5 ? debugMessages : null // Pass debug array only for first 5 rows
-        );
-        
-        // DEBUG: Log first 5 conversions
-        if (rowIndex <= 5 && convertedTime !== null) {
-          debugMessages.push(`Row ${rowIndex}: "${timeString}" → "${convertedTime}"`);
-        }
-        
-        // Always update Amended Time if we have a valid converted time
-        if (convertedTime !== null) {
-          // Update Amended Time column
-          const amendedTimeCell = worksheet.getCell(rowIndex, amendedTimeIndex);
-          amendedTimeCell.values = [[convertedTime]];
-          
-          // Update Notes column
-          const currentNotes = values[rowIndex][notesIndex]?.toString() || "";
-          const newNote = "TimeFormat Applied";
-          const updatedNotes = currentNotes ? `${currentNotes}, ${newNote}` : newNote;
-          
-          const notesCell = worksheet.getCell(rowIndex, notesIndex);
-          notesCell.values = [[updatedNotes]];
-          
-          updatedRows++;
-        }
-      }
-      
-      await context.sync();
-      
-      // Return debug info instead of showing it
-      const debugText = `TimeFormat Debug:\n${debugMessages.join('\n')}`;
-      
-      return { success: true, updatedRows: updatedRows, sourceColumn: sourceColumnName, debugInfo: debugText };
-    });
-  } catch (error) {
-    return { success: false, updatedRows: 0, error: error.message };
-  }
-}
-
-async function applyNameStandardisationRuleWithResult(): Promise<{
-  success: boolean;
-  updatedRows: number;
-  error?: string;
-}> {
-  try {
-    const updatedCount = await applyNameStandardisationToWorksheetWithUndo();
-    return { success: true, updatedRows: updatedCount };
-  } catch (error) {
-    return { success: false, updatedRows: 0, error: error.message };
-  }
-}
-
-// Travel Rule implementation
-async function applyTravelRuleWithResult(): Promise<{
-  success: boolean;
-  updatedRows: number;
-  error?: string;
-}> {
-  try {
-    // Get current matter and its rules
-    const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
-    if (!selectedMatter) {
-      return { success: false, updatedRows: 0, error: "No matter selected" };
-    }
-
-    const profiles = getMatterProfiles();
-    const currentProfile = profiles.find((p) => p.name === selectedMatter);
-    if (!currentProfile || !currentProfile.rules || !currentProfile.rules.travel) {
-      return { success: false, updatedRows: 0, error: "Travel rule not found in profile" };
-    }
-
-    const travelRule = currentProfile.rules.travel;
-    if (!travelRule.enabled) {
-      return { success: false, updatedRows: 0, error: "Travel rule is disabled" };
-    }
-
-    return await Excel.run(async (context) => {
-      const worksheet = context.workbook.worksheets.getActiveWorksheet();
-      const usedRange = worksheet.getUsedRange();
-      usedRange.load(["values", "rowCount", "columnCount"]);
-      await context.sync();
-
-      if (!usedRange) {
-        return { success: false, updatedRows: 0, error: "No data found in worksheet" };
-      }
-
-      const values = usedRange.values;
-      const headers = values[0].map((h) => h.toString().toLowerCase());
-
-      // Find required columns - look for Original Narrative first (after formatting), then fallback to Narrative
-      let narrativeCol = headers.findIndex(h => h.includes("original") && h.includes("narrative"));
-      if (narrativeCol === -1) {
-        // Fallback to regular narrative column if original doesn't exist
-        narrativeCol = headers.findIndex(h => 
-          h.includes("narrative") && !h.includes("amended") && !h.includes("original")
-        );
-      }
-      const chargeCol = headers.findIndex(h => h.includes("charge"));
-      const notesCol = headers.findIndex(h => h.includes("notes"));
-
-      if (narrativeCol === -1) {
-        const availableHeaders = headers.join(", ");
-        return { success: false, updatedRows: 0, error: `Narrative column not found. Available columns: ${availableHeaders}` };
-      }
-      if (chargeCol === -1) {
-        const availableHeaders = headers.join(", ");
-        return { success: false, updatedRows: 0, error: `Charge column not found. Available columns: ${availableHeaders}` };
-      }
-      if (notesCol === -1) {
-        const availableHeaders = headers.join(", ");
-        return { success: false, updatedRows: 0, error: `Notes column not found. Available columns: ${availableHeaders}` };
-      }
-
-      let updatedRows = 0;
-      
-      // Debug info about which columns were found
-      addDebugInfo(`Travel Rule: Using narrative column "${headers[narrativeCol]}" at index ${narrativeCol}`);
-      addDebugInfo(`Travel Rule: Using charge column "${headers[chargeCol]}" at index ${chargeCol}`);
-      addDebugInfo(`Travel Rule: Using notes column "${headers[notesCol]}" at index ${notesCol}`);
-
-      // Process each row (skip header)
-      for (let i = 1; i < values.length; i++) {
-        const narrative = (values[i][narrativeCol] || "").toString();
-        
-        if (!narrative) continue;
-
-        // Check if narrative contains any travel keywords
-        const containsTravelKeyword = travelRule.keywords.some(keyword => {
-          const searchText = travelRule.caseSensitive ? narrative : narrative.toLowerCase();
-          const searchKeyword = travelRule.caseSensitive ? keyword : keyword.toLowerCase();
-          return searchText.includes(searchKeyword);
-        });
-
-        if (containsTravelKeyword) {
-          // Update Charge column
-          const chargeCell = worksheet.getCell(i, chargeCol);
-          chargeCell.values = [[travelRule.chargeValue]];
-
-          // Update Notes column
-          const currentNotes = (values[i][notesCol] || "").toString();
-          const notesCell = worksheet.getCell(i, notesCol);
-          
-          // Add travel note if not already present
-          if (!currentNotes.includes(travelRule.noteText)) {
-            const newNotes = currentNotes ? `${currentNotes}; ${travelRule.noteText}` : travelRule.noteText;
-            notesCell.values = [[newNotes]];
-          }
-
-          updatedRows++;
-        }
-      }
-
-      await context.sync();
-      return { success: true, updatedRows };
-    });
-  } catch (error) {
-    console.error("Error applying Travel rule:", error);
-    return { success: false, updatedRows: 0, error: error.message };
-  }
-}
-
-// Non Chargeable Rule implementation
-async function applyNonChargeableRuleWithResult(): Promise<{
-  success: boolean;
-  updatedRows: number;
-  error?: string;
-}> {
-  try {
-    // Get current matter and its rules
-    const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
-    if (!selectedMatter) {
-      return { success: false, updatedRows: 0, error: "No matter selected" };
-    }
-
-    const profiles = getMatterProfiles();
-    const currentProfile = profiles.find((p) => p.name === selectedMatter);
-    if (!currentProfile || !currentProfile.rules || !currentProfile.rules.nonChargeable) {
-      return { success: false, updatedRows: 0, error: "Non Chargeable rule not found in profile" };
-    }
-
-    const nonChargeableRule = currentProfile.rules.nonChargeable;
-    if (!nonChargeableRule.enabled) {
-      return { success: false, updatedRows: 0, error: "Non Chargeable rule is disabled" };
-    }
-
-    return await Excel.run(async (context) => {
-      const worksheet = context.workbook.worksheets.getActiveWorksheet();
-      const usedRange = worksheet.getUsedRange();
-      usedRange.load(["values", "rowCount", "columnCount"]);
-      await context.sync();
-
-      if (!usedRange) {
-        return { success: false, updatedRows: 0, error: "No data found in worksheet" };
-      }
-
-      const values = usedRange.values;
-      const headers = values[0].map((h) => h.toString().toLowerCase());
-
-      // Find required columns - look for Original Narrative first (after formatting), then fallback to Narrative
-      let narrativeCol = headers.findIndex(h => h.includes("original") && h.includes("narrative"));
-      if (narrativeCol === -1) {
-        // Fallback to regular narrative column if original doesn't exist
-        narrativeCol = headers.findIndex(h => 
-          h.includes("narrative") && !h.includes("amended") && !h.includes("original")
-        );
-      }
-      const chargeCol = headers.findIndex(h => h.includes("charge"));
-      const notesCol = headers.findIndex(h => h.includes("notes"));
-
-      if (narrativeCol === -1) {
-        const availableHeaders = headers.join(", ");
-        return { success: false, updatedRows: 0, error: `Narrative column not found. Available columns: ${availableHeaders}` };
-      }
-      if (chargeCol === -1) {
-        const availableHeaders = headers.join(", ");
-        return { success: false, updatedRows: 0, error: `Charge column not found. Available columns: ${availableHeaders}` };
-      }
-      if (notesCol === -1) {
-        const availableHeaders = headers.join(", ");
-        return { success: false, updatedRows: 0, error: `Notes column not found. Available columns: ${availableHeaders}` };
-      }
-
-      let updatedRows = 0;
-      
-      // Debug info about which columns were found
-      addDebugInfo(`Non Chargeable Rule: Using narrative column "${headers[narrativeCol]}" at index ${narrativeCol}`);
-      addDebugInfo(`Non Chargeable Rule: Using charge column "${headers[chargeCol]}" at index ${chargeCol}`);
-      addDebugInfo(`Non Chargeable Rule: Using notes column "${headers[notesCol]}" at index ${notesCol}`);
-
-      // Get all enabled subcategories
-      const enabledSubcategories = [];
-      if (nonChargeableRule.subcategories.clericalAdmin.enabled) {
-        enabledSubcategories.push({ name: "Clerical/Admin", config: nonChargeableRule.subcategories.clericalAdmin });
-      }
-      if (nonChargeableRule.subcategories.audit.enabled) {
-        enabledSubcategories.push({ name: "Audit", config: nonChargeableRule.subcategories.audit });
-      }
-      if (nonChargeableRule.subcategories.ownError.enabled) {
-        enabledSubcategories.push({ name: "Own Error", config: nonChargeableRule.subcategories.ownError });
-      }
-      if (nonChargeableRule.subcategories.research.enabled) {
-        enabledSubcategories.push({ name: "Research", config: nonChargeableRule.subcategories.research });
-      }
-
-      if (enabledSubcategories.length === 0) {
-        return { success: false, updatedRows: 0, error: "No subcategories are enabled" };
-      }
-
-      // Process each row (skip header)
-      for (let i = 1; i < values.length; i++) {
-        const narrative = (values[i][narrativeCol] || "").toString();
-        
-        if (!narrative) continue;
-
-        const matchedKeywords: { category: string; keyword: string }[] = [];
-
-        // Check each enabled subcategory
-        for (const subcategory of enabledSubcategories) {
-          for (const keyword of subcategory.config.keywords) {
-            const searchText = nonChargeableRule.caseSensitive ? narrative : narrative.toLowerCase();
-            const searchKeyword = nonChargeableRule.caseSensitive ? keyword : keyword.toLowerCase();
-            
-            if (searchText.includes(searchKeyword)) {
-              matchedKeywords.push({ category: subcategory.name, keyword: keyword });
-            }
-          }
-        }
-
-        if (matchedKeywords.length > 0) {
-          // Update Charge column
-          const chargeCell = worksheet.getCell(i, chargeCol);
-          chargeCell.values = [[nonChargeableRule.chargeValue]];
-
-          // Update Notes column with all matched keywords
-          const currentNotes = (values[i][notesCol] || "").toString();
-          const notesCell = worksheet.getCell(i, notesCol);
-          
-          // Create note text for each matched keyword: "Non Chargeable - [Category] - [Keyword]"
-          const newNotes = matchedKeywords.map(match => 
-            `Non Chargeable - ${match.category} - ${match.keyword}`
-          );
-          
-          // Combine with existing notes
-          const combinedNotes = currentNotes 
-            ? `${currentNotes}; ${newNotes.join("; ")}`
-            : newNotes.join("; ");
-          
-          notesCell.values = [[combinedNotes]];
-          updatedRows++;
-        }
-      }
-
-      await context.sync();
-      return { success: true, updatedRows };
-    });
-  } catch (error) {
-    console.error("Error applying Non Chargeable rule:", error);
-    return { success: false, updatedRows: 0, error: error.message };
-  }
-}
-
-// Missing Time Entries rule implementation
-async function applyMissingTimeEntriesRuleWithResult(): Promise<{
-  success: boolean;
-  updatedRows: number;
-  error?: string;
-}> {
-  try {
-    // Get current matter and its rules
-    const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
-    if (!selectedMatter) {
-      return { success: false, updatedRows: 0, error: "No matter selected" };
-    }
-
-    const profiles = getMatterProfiles();
-    const currentProfile = profiles.find((p) => p.name === selectedMatter);
-    if (!currentProfile || !currentProfile.rules || !currentProfile.rules.missingTimeEntries) {
-      return { success: false, updatedRows: 0, error: "Missing time entries rule not configured" };
-    }
-
-    const missingTimeRule = currentProfile.rules.missingTimeEntries;
-    if (!missingTimeRule.enabled) {
-      return { success: false, updatedRows: 0, error: "Missing time entries rule not enabled" };
-    }
-
-    return await Excel.run(async (context) => {
-      const worksheet = context.workbook.worksheets.getActiveWorksheet();
-      const usedRange = worksheet.getUsedRange();
-
-      if (!usedRange) {
-        return { success: false, updatedRows: 0, error: "No data found in worksheet" };
-      }
-
-      usedRange.load(["values", "rowCount", "columnCount"]);
-      await context.sync();
-
-      // Parse data into structured format (create mutable copy of headers)
-      let headers = [...(usedRange.values[0] as string[])];
-      const entries = [];
-      
-
-      for (let i = 1; i < usedRange.values.length; i++) {
-        const row = usedRange.values[i];
-        const entry: any = { rowIndex: i };
-
-        headers.forEach((header, colIndex) => {
-          entry[header.toLowerCase().replace(/\s+/g, "_")] = row[colIndex];
-        });
-
-        entries.push(entry);
-      }
-      
-
-      // Find required columns with more flexible matching
-      const feeEarnerCol = headers.findIndex((h) => {
-        const headerLower = h.toLowerCase();
-        return (
-          (headerLower.includes("fee") && headerLower.includes("earner")) ||
-          headerLower.includes("name") ||
-          headerLower.includes("person") ||
-          headerLower.includes("who") ||
-          headerLower.includes("user")
-        );
-      });
-
-      const dateCol = headers.findIndex((h) => {
-        const headerLower = h.toLowerCase();
-        return (
-          headerLower.includes("date") ||
-          headerLower.includes("day") ||
-          headerLower.includes("when")
-        );
-      });
-
-      const narrativeCol = headers.findIndex((h) => {
-        const headerLower = h.toLowerCase();
-        return (
-          headerLower.includes("narrative") ||
-          headerLower.includes("description") ||
-          headerLower.includes("note") ||
-          headerLower.includes("detail") ||
-          headerLower.includes("work") ||
-          headerLower.includes("activity")
-        );
-      });
-
-      if (feeEarnerCol === -1 || dateCol === -1 || narrativeCol === -1) {
-        showMessage(
-          `Missing Time rule failed: Cannot find required columns. Fee Earner: ${feeEarnerCol >= 0 ? "✓" : "✗"}, Date: ${dateCol >= 0 ? "✓" : "✗"}, Narrative: ${narrativeCol >= 0 ? "✓" : "✗"}`,
-          "error"
-        );
-        
-        return {
-          success: false,
-          updatedRows: 0,
-          error: `Required columns not found. Found: FeeEarner(${feeEarnerCol}), Date(${dateCol}), Narrative(${narrativeCol}). Headers: ${headers.join(", ")}`,
-        };
-      }
-
-
-      // Get fee earners list for name matching
-      const feeEarners = currentProfile.feeEarners || [];
-
-      // Show initial debugging info
-      showMessage(
-        `DEBUG: Starting with ${entries.length} entries, ${feeEarners.length} fee earners: ${feeEarners.map((fe) => fe.name).join(", ")}`,
-        "info"
-      );
-      showMessage(
-        `DEBUG: Meeting keywords: "${missingTimeRule.meetingKeywords.join('", "')}"`,
-        "info"
-      );
-
-      const missingEntries = [];
-
-      // Process each entry looking for meeting keywords
-      let processedCount = 0;
-      let meetingEntriesFound = 0;
-      
-      // Debug info moved to return value
-
-      for (const entry of entries) {
-        processedCount++;
-        const narrative = (entry[headers[narrativeCol].toLowerCase().replace(/\s+/g, "_")] || "")
-          .toString()
-          .toLowerCase();
-        const entryFeeEarner = (
-          entry[headers[feeEarnerCol].toLowerCase().replace(/\s+/g, "_")] || ""
-        ).toString();
-        const entryDate = entry[headers[dateCol].toLowerCase().replace(/\s+/g, "_")];
-
-        // Skip if no narrative or missing key data
-        if (!narrative || !entryFeeEarner || !entryDate) {
-          continue;
-        }
-
-
-        // Debug first few entries - removed old debug
-
-        // Check if narrative contains meeting keywords (with word boundary check)
-        const containsMeetingKeyword = missingTimeRule.meetingKeywords.some((keyword) => {
-          // Escape special regex characters
-          const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-          // Create a regex for word boundary matching
-          const keywordRegex = new RegExp(`\\b${escapeRegex(keyword.toLowerCase())}\\b`, "i");
-          const matches = keywordRegex.test(narrative);
-          return matches;
-        });
-
-        if (containsMeetingKeyword) {
-          meetingEntriesFound++;
-          
-          // Meeting found - debug info removed
-
-          // Show first few meeting entries found (to avoid spam)
-          if (meetingEntriesFound <= 3) {
-            showMessage(
-              `DEBUG: Found meeting entry ${meetingEntriesFound}: "${narrative.substring(0, 50)}..." by ${entryFeeEarner}`,
-              "info"
-            );
-          }
-          
-          // Debug: Show which keyword matched
-          const matchedKeyword = missingTimeRule.meetingKeywords.find((keyword) => {
-            const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-            const keywordRegex = new RegExp(`\\b${escapeRegex(keyword.toLowerCase())}\\b`, "i");
-            return keywordRegex.test(narrative);
-          });
-          // Checking fee earners
-          
-          // Find mentioned fee earners in the narrative
-          const mentionedFeeEarners = feeEarners
-            .filter((feeEarner) => {
-              const firstName = feeEarner.name.split(" ")[0].toLowerCase();
-              const lastName = feeEarner.name.split(" ").slice(1).join(" ").toLowerCase();
-              const fullName = feeEarner.name.toLowerCase();
-
-              // Escape special regex characters
-              const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-              // Create word boundary regex patterns to match names more accurately
-              const firstNameRegex = new RegExp(`\\b${escapeRegex(firstName)}\\b`, "i");
-              const lastNameRegex = lastName
-                ? new RegExp(`\\b${escapeRegex(lastName)}\\b`, "i")
-                : null;
-              const fullNameRegex = new RegExp(`\\b${escapeRegex(fullName)}\\b`, "i");
-
-              // Check various name patterns
-              const ismentioned =
-                fullNameRegex.test(narrative) ||
-                (firstNameRegex.test(narrative) && lastNameRegex && lastNameRegex.test(narrative));
-
-              if (ismentioned) {
-                // Found mentioned fee earner - debug info removed
-              } else {
-                // Additional debug logging for names that weren't matched
-                if (
-                  narrative.toLowerCase().includes(firstName) ||
-                  narrative.toLowerCase().includes(fullName)
-                ) {
-                  // Name appears in narrative but didn't match word boundary rules
-                }
-              }
-              return ismentioned;
-            })
-            .filter((feeEarner) => {
-              const isDifferentPerson = feeEarner.name !== entryFeeEarner;
-              return isDifferentPerson;
-            });
-
-
-          // Check if mentioned fee earners have reciprocal entries
-          for (const mentionedFeeEarner of mentionedFeeEarners) {
-            const hasReciprocalEntry = entries.some((otherEntry) => {
-              const otherFeeEarner = (
-                otherEntry[headers[feeEarnerCol].toLowerCase().replace(/\s+/g, "_")] || ""
-              ).toString();
-              const otherDate = otherEntry[headers[dateCol].toLowerCase().replace(/\s+/g, "_")];
-              const otherNarrative = (
-                otherEntry[headers[narrativeCol].toLowerCase().replace(/\s+/g, "_")] || ""
-              )
-                .toString()
-                .toLowerCase();
-
-              // Check if it's the right fee earner (case-insensitive comparison)
-              if (otherFeeEarner.toLowerCase() !== mentionedFeeEarner.name.toLowerCase()) {
-                // Debug log only for Callum entries
-                if (mentionedFeeEarner.name.toLowerCase().includes("callum") && 
-                    otherFeeEarner.toLowerCase().includes("callum"))
-                return false;
-              }
-
-              // Check date match (considering tolerance)
-              const datesMatch = datesWithinTolerance(
-                entryDate,
-                otherDate,
-                missingTimeRule.dateTolerance
-              );
-              if (!datesMatch) return false;
-
-              // Check if the reciprocal narrative mentions the original fee earner AND contains meeting keywords
-              const originalFirstName = entryFeeEarner.split(" ")[0].toLowerCase();
-              const originalFullName = entryFeeEarner.toLowerCase();
-              
-              // Escape special regex characters
-              const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-              
-              // Check if original fee earner is mentioned (using word boundaries)
-              const firstNameRegex = new RegExp(`\\b${escapeRegex(originalFirstName)}\\b`, "i");
-              const fullNameRegex = new RegExp(`\\b${escapeRegex(originalFullName)}\\b`, "i");
-              const mentionsOriginalFeeEarner = firstNameRegex.test(otherNarrative) || fullNameRegex.test(otherNarrative);
-              
-              // Check if narrative contains meeting keywords
-              const containsMeetingKeyword = missingTimeRule.meetingKeywords.some((keyword) => {
-                const keywordRegex = new RegExp(`\\b${escapeRegex(keyword.toLowerCase())}\\b`, "i");
-                return keywordRegex.test(otherNarrative);
-              });
-              
-              
-              // BOTH conditions must be met
-              return mentionsOriginalFeeEarner && containsMeetingKeyword;
-            });
-
-            if (!hasReciprocalEntry) {
-              missingEntries.push({
-                originalEntry: entry,
-                missingFeeEarner: mentionedFeeEarner,
-                date: entryDate,
-                narrative: narrative,
-              });
-            }
-          }
-        }
-      }
-
-
-      // Show detailed processing results in the UI
-      showMessage(
-        `DEBUG: Processed ${processedCount} entries, found ${meetingEntriesFound} meeting entries, identified ${missingEntries.length} missing reciprocal entries`,
-        "info"
-      );
-      
-      // If no meeting entries were found, provide more detail
-      if (meetingEntriesFound === 0) {
-        const debugMsg = `No meetings found. Keywords: ${missingTimeRule.meetingKeywords.join(", ")}`;
-        showMessage(
-          "Missing Time rule found no entries with meeting keywords. Check debug area for details.",
-          "warning"
-        );
-      }
-      
-
-      // Add notes to rows about missing entries and apply formatting
-      // Get the header row to find Notes column
-      const headerRow = headers;
-      let notesColumnIndex = findNotesColumn(headerRow);
-
-      if (notesColumnIndex === -1) {
-        // Create a simple Notes column without complex formatting
-        const originalColumnCount = usedRange.columnCount;
-        const newColumnIndex = originalColumnCount;
-        
-        // Insert column at the end
-        const insertColumn = worksheet.getCell(0, newColumnIndex).getEntireColumn();
-        insertColumn.insert(Excel.InsertShiftDirection.right);
-        
-        // Set header
-        const headerCell = worksheet.getCell(0, newColumnIndex);
-        headerCell.values = [["Notes"]];
-        
-        // Set the notes column index
-        notesColumnIndex = newColumnIndex;
-        
-        // Get fresh usedRange after column insertion
-        const newUsedRange = worksheet.getUsedRange();
-        newUsedRange.load(["values", "rowCount", "columnCount"]);
-        await context.sync();
-        
-        // Update our working variables (create a new array to avoid read-only issues)
-        headers = [...(newUsedRange.values[0] as string[])];
-        
-        // Apply consistent formatting to match other columns
-        const notesHeaderCell = worksheet.getCell(0, notesColumnIndex);
-        const borderColor = currentProfile.borderColor || "#D1D5DB";
-        const headerBgColor = currentProfile.headerBgColor || "#F3F4F6";
-        const headerTextColor = currentProfile.headerTextColor || "#374151";
-        
-        // Format header cell
-        notesHeaderCell.format.font.bold = true;
-        notesHeaderCell.format.fill.color = headerBgColor;
-        notesHeaderCell.format.font.color = headerTextColor;
-        notesHeaderCell.format.horizontalAlignment = "Center";
-        
-        // Apply borders to header
-        const headerBorderItems = ["EdgeTop", "EdgeBottom", "EdgeLeft", "EdgeRight"];
-        headerBorderItems.forEach((item) => {
-          notesHeaderCell.format.borders.getItem(item as any).style = "Continuous";
-          notesHeaderCell.format.borders.getItem(item as any).color = borderColor;
-        });
-        
-        // Format the entire Notes column to match existing columns
-        if (newUsedRange.rowCount > 1) {
-          // Apply borders to the entire Notes column (header + data)
-          const notesColumnRange = worksheet.getCell(0, notesColumnIndex).getEntireColumn().getUsedRange();
-          const borderItems = [
-            "EdgeTop",
-            "EdgeBottom", 
-            "EdgeLeft",
-            "EdgeRight",
-            "InsideHorizontal",
-            "InsideVertical",
-          ];
-          borderItems.forEach((item) => {
-            notesColumnRange.format.borders.getItem(item as any).style = "Continuous";
-            notesColumnRange.format.borders.getItem(item as any).color = borderColor;
-          });
-          
-          // Apply alternating row colors if enabled
-          const altRowColor1 = currentProfile.altRowColor1 || "#FFFFFF";
-          const altRowColor2 = currentProfile.altRowColor2 || "#F8F9FA";
-          const enableAlternatingRows = currentProfile.enableAlternatingRows !== false;
-          
-          if (enableAlternatingRows) {
-            for (let row = 1; row < newUsedRange.rowCount; row++) {
-              const cell = worksheet.getCell(row, notesColumnIndex);
-              if ((row + 1) % 2 === 0) {
-                cell.format.fill.color = altRowColor2;
-              } else {
-                cell.format.fill.color = altRowColor1;
-              }
-            }
-          }
-        }
-        
-        await context.sync();
-        
-        // Auto-fit the new Notes column width, respecting max width setting
-        const notesColumn = worksheet.getCell(0, notesColumnIndex).getEntireColumn();
-        notesColumn.format.autofitColumns();
-        await context.sync();
-        
-        // Apply max width constraint if needed
-        const maxColumnWidth = currentProfile.maxColumnWidth || 300;
-        notesColumn.load("format/columnWidth");
-        await context.sync();
-        
-        if (notesColumn.format.columnWidth > maxColumnWidth) {
-          notesColumn.format.columnWidth = maxColumnWidth;
-          notesColumn.format.wrapText = true;
-        }
-      }
-
-      
-      // Debug message removed - now shown in debug area
-      
-      let updatedCount = 0;
-      for (const missing of missingEntries) {
-        const rowIndex = missing.originalEntry.rowIndex;
-        const noteText = `Missing Time`;
-
-        // Get current Notes cell value and update it
-        const notesCell = worksheet.getCell(rowIndex, notesColumnIndex);
-        notesCell.load("values");
-        await context.sync();
-
-        const existingNotes = notesCell.values[0][0]?.toString() || "";
-        const updatedNotes = addNoteToRow(existingNotes, noteText);
-
-
-        if (updatedNotes !== existingNotes) {
-          // Update the Notes cell
-          notesCell.values = [[updatedNotes]];
-
-          // Apply pale blue formatting to the entire row to highlight missing time
-          const rowRange = worksheet.getCell(rowIndex, 0).getEntireRow();
-          rowRange.format.fill.color = "#E3F2FD"; // Pale blue background
-          
-          // Track this row as having Missing Time formatting for priority handling
-          missingTimeRows.add(rowIndex);
-
-          await context.sync();
-          updatedCount++;
-
-        }
-
-        // Create placeholder entry if enabled
-        if (missingTimeRule.createMissingEntries) {
-          await createPlaceholderEntry(worksheet, missing, rowIndex, headers, currentProfile);
-          await context.sync();
-        }
-      }
-
-      return { success: true, updatedRows: updatedCount };
-    });
-  } catch (error) {
-    console.error("Error applying missing time entries rule:", error);
-    return { success: false, updatedRows: 0, error: error.message };
-  }
-}
-
-// Helper function to create placeholder entry for missing time
-async function createPlaceholderEntry(
-  worksheet: Excel.Worksheet,
-  missing: any,
-  parentRowIndex: number,
-  headers: string[],
-  currentProfile: any
-) {
-  // Insert a new row right after the parent entry
-  const insertRowIndex = parentRowIndex + 1;
-  const insertRange = worksheet.getCell(insertRowIndex, 0).getEntireRow();
-  insertRange.insert(Excel.InsertShiftDirection.down);
-
-  // Get original entry data
-  const originalEntry = missing.originalEntry;
-  const originalFeeEarnerFromEntry =
-    originalEntry[
-      headers
-        .find(
-          (h) =>
-            (h.toLowerCase().includes("fee") && h.toLowerCase().includes("earner")) ||
-            h.toLowerCase().includes("name")
-        )
-        ?.toLowerCase()
-        .replace(/\s+/g, "_")
-    ] || "";
-
-  // Get fee earners configuration for this matter
-  const feeEarners = currentProfile.feeEarners || [];
-  
-  // Find the full name of the original fee earner from the fee earners list
-  let originalFeeEarnerFullName = originalFeeEarnerFromEntry;
-  const originalFirstName = originalFeeEarnerFromEntry.split(" ")[0].toLowerCase();
-  
-  // Look for a match in the fee earners list to get the proper full name
-  const matchingFeeEarner = feeEarners.find((fe: FeeEarner) => {
-    const feFirstName = fe.name.split(" ")[0].toLowerCase();
-    const feFullNameLower = fe.name.toLowerCase();
-    return feFirstName === originalFirstName || feFullNameLower === originalFeeEarnerFromEntry.toLowerCase();
-  });
-  
-  if (matchingFeeEarner) {
-    originalFeeEarnerFullName = matchingFeeEarner.name;
-  }
-
-  const originalNarrative =
-    originalEntry[
-      headers
-        .find(
-          (h) => h.toLowerCase().includes("narrative") || h.toLowerCase().includes("description")
-        )
-        ?.toLowerCase()
-        .replace(/\s+/g, "_")
-    ] || "";
-
-  // Create new row data with swapped names
-  for (let colIndex = 0; colIndex < headers.length; colIndex++) {
-    const header = headers[colIndex];
-    const headerKey = header.toLowerCase().replace(/\s+/g, "_");
-    let cellValue = originalEntry[headerKey];
-
-    // Handle fee earner column - swap to missing person
-    if (
-      (header.toLowerCase().includes("fee") && header.toLowerCase().includes("earner")) ||
-      header.toLowerCase().includes("name")
-    ) {
-      cellValue = missing.missingFeeEarner.name;
-    }
-    // Handle narrative column - swap names in narrative
-    else if (
-      header.toLowerCase().includes("narrative") ||
-      header.toLowerCase().includes("description")
-    ) {
-      if (cellValue) {
-        // Replace missing fee earner name with original fee earner's FULL name in narrative
-        // (so the new entry for B mentions A's full name instead of B)
-        let swappedNarrative = cellValue.toString();
-
-        // First try to replace the full name if present
-        swappedNarrative = swappedNarrative.replace(
-          new RegExp(missing.missingFeeEarner.name, "gi"),
-          originalFeeEarnerFullName
-        );
-
-        // Then try to replace just the first name with the full name
-        const missingFirstName = missing.missingFeeEarner.name.split(" ")[0];
-        // Use word boundaries to ensure we're replacing whole words
-        swappedNarrative = swappedNarrative.replace(
-          new RegExp(`\\b${missingFirstName}\\b`, "gi"),
-          originalFeeEarnerFullName
-        );
-
-        cellValue = swappedNarrative;
-      }
-    }
-    // Handle Notes column - add Missing Time entry note
-    else if (header.toLowerCase().includes("notes")) {
-      cellValue = "Added - Missing Time";
-    }
-
-    // Set the cell value
-    if (cellValue !== undefined && cellValue !== null) {
-      const newCell = worksheet.getCell(insertRowIndex, colIndex);
-      newCell.values = [[cellValue]];
-    }
-  }
-
-  // Apply consistent formatting to match parent row
-  const parentRow = worksheet.getCell(parentRowIndex, 0).getEntireRow();
-  const newRow = worksheet.getCell(insertRowIndex, 0).getEntireRow();
-
-  // Copy formatting from parent (this is basic - could be enhanced)
-  if (currentProfile.enableAlternatingRows !== false) {
-    const altRowColor1 = currentProfile.altRowColor1 || "#FFFFFF";
-    const altRowColor2 = currentProfile.altRowColor2 || "#F8F9FA";
-    // Use alternating color logic
-    const useAltColor = insertRowIndex % 2 === 0;
-    newRow.format.fill.color = useAltColor ? altRowColor2 : altRowColor1;
-  }
-}
-
-// Helper function to parse dates from various formats
-function parseDate(dateValue: any): Date | null {
-  if (!dateValue) return null;
-  
-  // If it's already a Date object, return it
-  if (dateValue instanceof Date) {
-    return isNaN(dateValue.getTime()) ? null : dateValue;
-  }
-  
-  // Convert to string and trim
-  const dateStr = dateValue.toString().trim();
-  if (!dateStr) return null;
-  
-  // Try parsing Excel serial number (number of days since 1900-01-01)
-  const numValue = Number(dateStr);
-  if (!isNaN(numValue) && numValue > 0 && numValue < 100000 && dateStr.match(/^\d+$/)) {
-    // Excel's epoch is January 1, 1900 (serial number 1)
-    const epoch = new Date(1900, 0, 1);
-    
-    // Excel has a bug where it thinks 1900 is a leap year
-    // If the serial is after February 28, 1900 (serial 59), we need to subtract 1 day
-    let adjustedSerial = numValue;
-    if (numValue > 59) {
-      adjustedSerial = numValue - 1;
-    }
-    
-    // Convert to date (subtract 1 because Excel serial 1 = Jan 1, 1900)
-    return new Date(epoch.getTime() + (adjustedSerial - 1) * 24 * 60 * 60 * 1000);
-  }
-  
-  // Define date format patterns with explicit parsing
-  // We do this BEFORE trying built-in Date() to handle ambiguous formats correctly
-  const patterns = [
-    // ISO formats (unambiguous)
-    {
-      regex: /^(\d{4})-(\d{1,2})-(\d{1,2})(?:\s+\d{1,2}:\d{1,2})?$/,
-      parse: (match: RegExpMatchArray) => new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]))
-    },
-    {
-      regex: /^(\d{4})\/(\d{1,2})\/(\d{1,2})(?:\s+\d{1,2}:\d{1,2})?$/,
-      parse: (match: RegExpMatchArray) => new Date(parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]))
-    },
-    
-    // European format with dots (DD.MM.YYYY - unambiguous due to separator)
-    {
-      regex: /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/,
-      parse: (match: RegExpMatchArray) => new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]))
-    },
-    
-    // Ambiguous slash/dash formats - we'll try multiple interpretations
-    {
-      regex: /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s+\d{1,2}:\d{1,2}.*)?$/,
-      parse: (match: RegExpMatchArray) => {
-        const [, first, second, year] = match;
-        const f = parseInt(first);
-        const s = parseInt(second);
-        const y = parseInt(year);
-        
-        // Try to determine format based on values
-        if (f > 12 && s <= 12) {
-          // First number > 12, must be day (DD/MM/YYYY)
-          return new Date(y, s - 1, f);
-        } else if (s > 12 && f <= 12) {
-          // Second number > 12, must be day (MM/DD/YYYY)
-          return new Date(y, f - 1, s);
-        } else {
-          // Ambiguous - try both formats and pick the most reasonable one
-          // Default to MM/DD/YYYY (US format) for now
-          // You could make this configurable based on user locale
-          const usDate = new Date(y, f - 1, s);  // MM/DD/YYYY
-          const euDate = new Date(y, s - 1, f);  // DD/MM/YYYY
-          
-          // Return the US format by default, but we could add logic to prefer one over the other
-          return !isNaN(usDate.getTime()) ? usDate : euDate;
-        }
-      }
-    }
-  ];
-  
-  // Try each pattern
-  for (const pattern of patterns) {
-    const match = dateStr.match(pattern.regex);
-    if (match) {
-      try {
-        const result = pattern.parse(match);
-        if (result && !isNaN(result.getTime())) {
-          return result;
-        }
-      } catch (e) {
-        // Continue to next pattern
-      }
-    }
-  }
-  
-  // Try built-in Date parsing as last resort (good for natural language dates)
-  // This handles cases like "6 January 2024" or "Jan 6, 2024"
-  let parsed = new Date(dateStr.replace(/(\d+)(st|nd|rd|th)/g, '$1')); // Remove ordinals
-  if (!isNaN(parsed.getTime())) {
-    return parsed;
-  }
-  
-  // Final fallback - try standard Date parsing
-  parsed = new Date(dateStr);
-  if (!isNaN(parsed.getTime())) {
-    return parsed;
-  }
-  
-  return null;
-}
-
-// Helper function to check if dates are within tolerance
-function datesWithinTolerance(date1: any, date2: any, toleranceDays: number): boolean {
-  try {
-    const d1 = parseDate(date1);
-    const d2 = parseDate(date2);
-
-    if (!d1 || !d2) {
-      console.log(`Date parsing failed: date1="${date1}" parsed to ${d1}, date2="${date2}" parsed to ${d2}`);
-      return false; // Invalid dates
-    }
-
-    const diffMs = Math.abs(d1.getTime() - d2.getTime());
-    const diffDays = diffMs / (1000 * 60 * 60 * 24);
-
-    return diffDays <= toleranceDays;
-  } catch (error) {
-    console.error(`Error comparing dates: ${error}`);
-    return false;
-  }
-}
-
-// Modified apply function to support undo
-async function applyNameStandardisationToWorksheetWithUndo(): Promise<number> {
-  try {
-    // Get current matter and its rules
-    const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
-    if (!selectedMatter) {
-      showMessage(
-        "Please select a matter profile before applying name standardisation rules.",
-        "error"
-      );
-      return 0;
-    }
-
-    const profiles = getMatterProfiles();
-    const currentProfile = profiles.find((p) => p.name === selectedMatter);
-    if (!currentProfile || !currentProfile.rules) {
-      showMessage("No rules found for the selected matter profile.", "error");
-      return 0;
-    }
-
-    const nameRule = currentProfile.rules.nameStandardisation;
-    if (!nameRule.enabled) {
-      showMessage("Name standardisation rule is not enabled for this matter.", "info");
-      return 0;
-    }
-
-    const feeEarners = currentProfile.feeEarners || [];
-    if (feeEarners.length === 0) {
-      showMessage("No fee earners found for this matter. Please add fee earners first.", "error");
-      return 0;
-    }
-
-    return await Excel.run(async (context) => {
-      const worksheet = context.workbook.worksheets.getActiveWorksheet();
-      const usedRange = worksheet.getUsedRange();
-
-      if (!usedRange) {
-        showMessage("No data found in the worksheet to process.", "error");
-        return 0;
-      }
-
-      usedRange.load(["values", "formulas", "rowCount", "columnCount"]);
-      await context.sync();
-
-      // Convert Excel data to a workable format
-      const headers = usedRange.values[0] as string[];
-      const worksheetData: any[] = [];
-
-      for (let i = 1; i < usedRange.values.length; i++) {
-        const row = usedRange.values[i];
-        const rowData: any = {};
-
-        headers.forEach((header, colIndex) => {
-          rowData[header] = row[colIndex];
-        });
-
-        worksheetData.push(rowData);
-      }
-
-      // Apply name standardisation rules
-      const processedData = applyNameStandardisationRule(worksheetData, feeEarners, nameRule);
-
-      // Create undo snapshot
-      const undoSnapshot: UndoSnapshot = {
-        timestamp: Date.now(),
-        changes: [],
-      };
-
-      // Update the worksheet with processed data and track changes
-      let updatedCount = 0;
-
-      // Check if "Amended Narrative" column exists
-      let amendedNarrativeCol = headers.findIndex(
-        (h) => h.toLowerCase().includes("amended") && h.toLowerCase().includes("narrative")
-      );
-
-      // If column doesn't exist, we need to check if we need to create it
-      const needsAmendedColumn =
-        amendedNarrativeCol < 0 &&
-        processedData.some((row) => row["Amended Narrative"] !== undefined);
-
-      if (needsAmendedColumn) {
-        // Handle column creation (same as before)
-        const sourceCol = headers.findIndex(
-          (h) =>
-            (h.toLowerCase().includes("original") && h.toLowerCase().includes("narrative")) ||
-            (h.toLowerCase().includes("narrative") && !h.toLowerCase().includes("amended"))
-        );
-
-        if (sourceCol >= 0) {
-          const insertCol = sourceCol + 1;
-          const newColumn = worksheet.getCell(0, insertCol).getEntireColumn();
-          newColumn.insert(Excel.InsertShiftDirection.right);
-
-          const headerCell = worksheet.getCell(0, insertCol);
-          headerCell.values = [["Amended Narrative"]];
-
-          amendedNarrativeCol = insertCol;
-          headers.splice(insertCol, 0, "Amended Narrative");
-
-          await context.sync();
-        }
-      }
-
-      // First, update the Amended Narrative data
-      for (let i = 0; i < processedData.length; i++) {
-        const processedRow = processedData[i];
-        const amendedValue = processedRow["Amended Narrative"];
-
-        if (amendedValue !== undefined && amendedNarrativeCol >= 0) {
-          // Get the old value for undo
-          const oldValue = usedRange.values[i + 1][amendedNarrativeCol] || "";
-
-          if (amendedValue !== oldValue) {
-            // Track this change for undo
-            undoSnapshot.changes.push({
-              row: i + 1,
-              column: amendedNarrativeCol,
-              oldValue: oldValue,
-              newValue: amendedValue,
-            });
-
-            // Update the cell
-            const cell = worksheet.getCell(i + 1, amendedNarrativeCol);
-            cell.values = [[amendedValue]];
-            updatedCount++;
-          }
-        }
-      }
-
-      // Sync the amended narrative changes before adding notes
-      await context.sync();
-
-      // Find Notes column (should exist if Name Standardisation is enabled)
-      let notesCol = findNotesColumn(headers);
-      
-      // If Notes column doesn't exist, create it
-      if (notesCol === -1 && updatedCount > 0) {
-        console.log("Notes column not found, creating it for Name Standardisation notes...");
-        
-        // Create Notes column at the end
-        const newColumnIndex = headers.length;
-        const insertColumn = worksheet.getCell(0, newColumnIndex).getEntireColumn();
-        insertColumn.insert(Excel.InsertShiftDirection.right);
-        
-        // Set header
-        const headerCell = worksheet.getCell(0, newColumnIndex);
-        headerCell.values = [["Notes"]];
-        
-        // Apply formatting from the profile
-        const borderColor = currentProfile.borderColor || "#D1D5DB";
-        const borderStyle: Excel.BorderLineStyle = "Continuous";
-        const borderWeight: Excel.BorderWeight = "Thin";
-        
-        headerCell.format.borders.getItem("EdgeBottom").style = borderStyle;
-        headerCell.format.borders.getItem("EdgeBottom").color = borderColor;
-        headerCell.format.borders.getItem("EdgeBottom").weight = borderWeight;
-        headerCell.format.borders.getItem("EdgeTop").style = borderStyle;
-        headerCell.format.borders.getItem("EdgeTop").color = borderColor;
-        headerCell.format.borders.getItem("EdgeTop").weight = borderWeight;
-        headerCell.format.borders.getItem("EdgeLeft").style = borderStyle;
-        headerCell.format.borders.getItem("EdgeLeft").color = borderColor;
-        headerCell.format.borders.getItem("EdgeLeft").weight = borderWeight;
-        headerCell.format.borders.getItem("EdgeRight").style = borderStyle;
-        headerCell.format.borders.getItem("EdgeRight").color = borderColor;
-        headerCell.format.borders.getItem("EdgeRight").weight = borderWeight;
-        
-        headerCell.format.fill.color = currentProfile.headerBgColor || "#1E3A8A";
-        headerCell.format.font.color = currentProfile.headerTextColor || "#FFFFFF";
-        headerCell.format.font.bold = true;
-        headerCell.format.horizontalAlignment = "Center";
-        headerCell.format.verticalAlignment = currentProfile.verticalAlignment || "Center";
-        
-        // Set the notes column index
-        notesCol = newColumnIndex;
-        headers.push("Notes");
-        
-        await context.sync();
-        console.log(`Created Notes column at index ${notesCol}`);
-      }
-
-      // Now add notes for rows that were changed
-      console.log(`Adding notes for ${processedData.length} rows. amendedNarrativeCol: ${amendedNarrativeCol}, notesCol: ${notesCol}`);
-      let notesAddedCount = 0;
-      
-      for (let i = 0; i < processedData.length; i++) {
-        const processedRow = processedData[i];
-        const amendedValue = processedRow["Amended Narrative"];
-
-        if (amendedValue !== undefined && amendedNarrativeCol >= 0 && notesCol >= 0) {
-          // Check if this row had changes
-          const hadChanges = undoSnapshot.changes.some(
-            (change) => change.row === i + 1 && change.column === amendedNarrativeCol
-          );
-
-          if (hadChanges) {
-            // Get current Notes cell value
-            const notesCell = worksheet.getCell(i + 1, notesCol);
-            notesCell.load("values");
-            await context.sync();
-
-            const existingNotes = notesCell.values[0][0]?.toString() || "";
-            const updatedNotes = addNoteToRow(existingNotes, "Name Standardised");
-
-            if (updatedNotes !== existingNotes) {
-              // Track Notes column change for undo
-              undoSnapshot.changes.push({
-                row: i + 1,
-                column: notesCol,
-                oldValue: existingNotes,
-                newValue: updatedNotes,
-              });
-
-              // Update the Notes cell
-              notesCell.values = [[updatedNotes]];
-              notesAddedCount++;
-              console.log(`Added note to row ${i + 1}: "${updatedNotes}"`);
-            }
-          }
-        }
-      }
-      
-      console.log(`Notes added to ${notesAddedCount} rows out of ${updatedCount} updated rows`);
-
-      await context.sync();
-
-      // Store undo snapshot only if changes were made
-      if (undoSnapshot.changes.length > 0) {
-        lastUndoSnapshot = undoSnapshot;
-        updateUndoButtonState();
-      }
-
-      if (updatedCount > 0) {
-        showMessage(
-          `Name standardisation applied successfully. Updated ${updatedCount} rows. Undo is available.`,
-          "success"
-        );
-      } else {
-        showMessage("Name standardisation completed, but no changes were needed.", "info");
-      }
-
-      return updatedCount;
-    });
-  } catch (error) {
-    console.error("Error applying name standardisation:", error);
-    showMessage("An error occurred while applying name standardisation: " + error.message, "error");
-    return 0;
-  }
-}
-
-// Rules Management Functions
-// Time format conversion utilities
-function parseTimeToMinutes(timeStr: string, debugMessages?: string[]): number | null {
-  if (!timeStr || typeof timeStr !== 'string') return null;
-  
-  const trimmed = timeStr.trim();
-  
-  // Check for HH:MM format (e.g., "1:30", "01:30", "10:15")
-  const hhmmMatch = trimmed.match(/^(\d{1,2}):(\d{2})$/);
-  if (hhmmMatch) {
-    const hours = parseInt(hhmmMatch[1], 10);
-    const minutes = parseInt(hhmmMatch[2], 10);
-    if (hours >= 0 && minutes >= 0 && minutes < 60) {
-      const totalMinutes = hours * 60 + minutes;
-      if (debugMessages) {
-        debugMessages.push(`Parse: "${trimmed}" = ${hours}h ${minutes}m = ${totalMinutes} min`);
-      }
-      return totalMinutes;
-    }
-  }
-  
-  // Check for decimal format
-  const decimalMatch = trimmed.match(/^(\d+)\.(\d+)$/);
-  if (decimalMatch) {
-    const wholePart = parseInt(decimalMatch[1], 10);
-    const decimalValue = parseFloat(trimmed);
-    
-    // Check if this looks like a fraction of a day (Excel time format)
-    // This includes values with many decimal places OR common day fractions like 0.25 (6 hours)
-    const isLikelyDayFraction = (wholePart === 0 && decimalMatch[2].length > 5) || 
-                               (decimalValue === 0.25 || decimalValue === 0.5 || decimalValue === 0.75) ||
-                               (wholePart === 0 && decimalValue < 0.1);
-    
-    if (isLikelyDayFraction && decimalValue < 1.0) {
-      // This is likely a fraction of a day (Excel internal time format)
-      // Convert from fraction of day to minutes
-      const totalMinutes = Math.round(decimalValue * 24 * 60);
-      if (debugMessages) {
-        debugMessages.push(`Parse: "${trimmed}" = ${decimalValue.toFixed(6)} day fraction = ${totalMinutes} min`);
-      }
-      return totalMinutes;
-    } else {
-      // Handle normal decimal hour formats
-      const decimalPart = decimalMatch[2];
-      let fractionalHours: number;
-      
-      if (decimalPart.length === 1) {
-        // Single digit after decimal (e.g., 0.1, 0.2, 0.5)
-        // Interpret as tenths of an hour
-        fractionalHours = parseInt(decimalPart, 10) / 10;
-      } else {
-        // Multiple digits after decimal (e.g., 0.25, 0.75)
-        // Interpret as decimal hours
-        fractionalHours = parseFloat(`0.${decimalPart}`);
-      }
-      
-      const totalHours = wholePart + fractionalHours;
-      const totalMinutes = Math.round(totalHours * 60);
-      
-      if (debugMessages) {
-        debugMessages.push(`Parse: "${trimmed}" = ${totalHours.toFixed(2)}h = ${totalMinutes} min`);
-      }
-      return totalMinutes;
-    }
-  }
-  
-  // Check if it's a whole number (assume hours, not minutes)
-  const numberMatch = trimmed.match(/^(\d+)$/);
-  if (numberMatch) {
-    const hours = parseInt(numberMatch[1], 10);
-    const totalMinutes = hours * 60;
-    if (debugMessages) {
-      debugMessages.push(`Parse: "${trimmed}" = ${hours}h = ${totalMinutes} min`);
-    }
-    return totalMinutes;
-  }
-  
-  if (debugMessages) {
-    debugMessages.push(`Parse FAILED: "${trimmed}"`);
-  }
-  return null;
-}
-
-function roundToSixMinutes(minutes: number): number {
-  return Math.round(minutes / 6) * 6;
-}
-
-function formatMinutesToHHMM(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return `${hours}:${mins.toString().padStart(2, '0')}`;
-}
-
-function formatMinutesToDecimal(minutes: number): string {
-  const totalHours = minutes / 60;
-  return totalHours.toFixed(1);
-}
-
-function convertTimeFormat(timeStr: string, outputFormat: "HH:MM" | "XX.YY", roundToSix: boolean, debugMessages?: string[]): string | null {
-  const minutes = parseTimeToMinutes(timeStr, debugMessages);
-  if (minutes === null) return null;
-  
-  const finalMinutes = roundToSix ? roundToSixMinutes(minutes) : minutes;
-  
-  if (debugMessages && roundToSix && minutes !== finalMinutes) {
-    debugMessages.push(`Rounded: ${minutes} min → ${finalMinutes} min`);
-  }
-  
-  if (outputFormat === "HH:MM") {
-    return formatMinutesToHHMM(finalMinutes);
-  } else {
-    return formatMinutesToDecimal(finalMinutes);
+    showMessage(`Error applying rules: ${error.message}`, "error");
   }
 }
 
@@ -4917,7 +1932,22 @@ function getDefaultRules(): RulesConfig {
     },
     travel: {
       enabled: false,
-      keywords: ["travel", "travelling", "drive", "driving", "airport", "flight", "hotel", "accommodation", "train", "taxi", "uber", "journey", "commute", "transport"],
+      keywords: [
+        "travel",
+        "travelling",
+        "drive",
+        "driving",
+        "airport",
+        "flight",
+        "hotel",
+        "accommodation",
+        "train",
+        "taxi",
+        "uber",
+        "journey",
+        "commute",
+        "transport",
+      ],
       caseSensitive: false,
       chargeValue: "N",
       noteText: "NonBillable - Travel",
@@ -4929,21 +1959,68 @@ function getDefaultRules(): RulesConfig {
       subcategories: {
         clericalAdmin: {
           enabled: false,
-          keywords: ["filing", "admin", "administration", "clerical", "photocopying", "scanning", "organizing", "office", "paperwork", "housekeeping"],
+          keywords: [
+            "filing",
+            "admin",
+            "administration",
+            "clerical",
+            "photocopying",
+            "scanning",
+            "organizing",
+            "office",
+            "paperwork",
+            "housekeeping",
+          ],
         },
         audit: {
           enabled: false,
-          keywords: ["audit", "auditing", "compliance", "review", "checking", "verification", "quality control", "monitoring"],
+          keywords: [
+            "audit",
+            "auditing",
+            "compliance",
+            "review",
+            "checking",
+            "verification",
+            "quality control",
+            "monitoring",
+          ],
         },
         ownError: {
           enabled: false,
-          keywords: ["mistake", "error", "correction", "fix", "redo", "revise", "amend", "rectify", "wrong", "incorrect"],
+          keywords: [
+            "mistake",
+            "error",
+            "correction",
+            "fix",
+            "redo",
+            "revise",
+            "amend",
+            "rectify",
+            "wrong",
+            "incorrect",
+          ],
         },
         research: {
-          enabled: false,  
-          keywords: ["research", "investigating", "learning", "studying", "training", "education", "reading", "background", "familiarization"],
+          enabled: false,
+          keywords: [
+            "research",
+            "investigating",
+            "learning",
+            "studying",
+            "training",
+            "education",
+            "reading",
+            "background",
+            "familiarization",
+          ],
         },
       },
+    },
+    maxDailyHours: {
+      enabled: false,
+      maxHours: 10,
+      chargeValue: "Q",
+      noteText: "Max Daily Hours Exceeded",
     },
   };
 }
@@ -4951,43 +2028,48 @@ function getDefaultRules(): RulesConfig {
 function getCurrentRules(): RulesConfig {
   const excludedNamesText = (document.getElementById("excluded-names") as HTMLInputElement).value;
   const excludedNames = excludedNamesText
-    .split(",")
-    .map((name) => name.trim())
-    .filter((name) => name.length > 0);
+    ? excludedNamesText
+        .split(",")
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0)
+    : [];
 
-  const minPartialMatchLength = parseInt(
-    (document.getElementById("min-partial-match-length") as HTMLInputElement).value || "3",
-    10
-  );
+  const customNicknames = getNicknameDatabaseFromForm();
 
   return {
     timeFormat: {
-      enabled: (document.getElementById("time-format-enabled") as HTMLInputElement)?.checked || false,
-      outputFormat: ((document.getElementById("time-format-output") as HTMLSelectElement)?.value as "HH:MM" | "XX.YY") || "HH:MM",
-      roundToSixMinutes: (document.getElementById("time-format-round") as HTMLInputElement)?.checked !== false,
+      enabled:
+        (document.getElementById("time-format-enabled") as HTMLInputElement)?.checked || false,
+      outputFormat:
+        ((document.getElementById("time-format-output") as HTMLSelectElement)?.value as
+          | "HH:MM"
+          | "XX.YY") || "HH:MM",
+      roundToSixMinutes:
+        (document.getElementById("time-format-round") as HTMLInputElement)?.checked || false,
     },
     nameStandardisation: {
       enabled: (document.getElementById("name-standardisation-enabled") as HTMLInputElement)
         .checked,
-      caseSensitive: false, // Case sensitivity removed from Stage 1
+      caseSensitive: false, // Always false for now
       allowPartialMatches: (document.getElementById("partial-matches") as HTMLInputElement).checked,
       useDateMatching: (document.getElementById("date-matching") as HTMLInputElement).checked,
       replaceOnlyFirstOccurrence: (
         document.getElementById("first-occurrence-only") as HTMLInputElement
       ).checked,
       excludedNames: excludedNames,
-      minPartialMatchLength: minPartialMatchLength,
+      minPartialMatchLength: parseInt(
+        (document.getElementById("min-partial-match-length") as HTMLInputElement).value || "3"
+      ),
       useNicknameDatabase: (document.getElementById("use-nickname-database") as HTMLInputElement)
         .checked,
-      customNicknames: getCurrentNicknames(),
+      customNicknames: customNicknames,
     },
     missingTimeEntries: {
       enabled:
         (document.getElementById("missing-time-entries-enabled") as HTMLInputElement)?.checked ||
         false,
       dateTolerance: parseInt(
-        (document.getElementById("date-tolerance") as HTMLInputElement)?.value || "0",
-        10
+        (document.getElementById("date-tolerance") as HTMLInputElement)?.value || "0"
       ),
       meetingKeywords: (
         (document.getElementById("meeting-keywords") as HTMLInputElement)?.value ||
@@ -5002,10 +2084,10 @@ function getCurrentRules(): RulesConfig {
         (document.getElementById("create-missing-entries") as HTMLInputElement)?.checked || false,
     },
     needsDetail: {
-      enabled: (document.getElementById("needs-detail-enabled") as HTMLInputElement)?.checked || false,
+      enabled:
+        (document.getElementById("needs-detail-enabled") as HTMLInputElement)?.checked || false,
       minWordCount: parseInt(
-        (document.getElementById("min-word-count") as HTMLInputElement)?.value || "3",
-        10
+        (document.getElementById("min-word-count") as HTMLInputElement)?.value || "3"
       ),
     },
     travel: {
@@ -5017,17 +2099,27 @@ function getCurrentRules(): RulesConfig {
         .split(",")
         .map((keyword) => keyword.trim())
         .filter((keyword) => keyword.length > 0),
-      caseSensitive: (document.getElementById("travel-case-sensitive") as HTMLInputElement)?.checked || false,
-      chargeValue: (document.getElementById("travel-charge-value") as HTMLInputElement)?.value || "N",
-      noteText: (document.getElementById("travel-note-text") as HTMLInputElement)?.value || "NonBillable - Travel",
+      caseSensitive:
+        (document.getElementById("travel-case-sensitive") as HTMLInputElement)?.checked || false,
+      chargeValue:
+        (document.getElementById("travel-charge-value") as HTMLInputElement)?.value || "N",
+      noteText:
+        (document.getElementById("travel-note-text") as HTMLInputElement)?.value ||
+        "NonBillable - Travel",
     },
     nonChargeable: {
-      enabled: (document.getElementById("non-chargeable-enabled") as HTMLInputElement)?.checked || false,
-      caseSensitive: (document.getElementById("non-chargeable-case-sensitive") as HTMLInputElement)?.checked || false,
-      chargeValue: (document.getElementById("non-chargeable-charge-value") as HTMLInputElement)?.value || "N",
+      enabled:
+        (document.getElementById("non-chargeable-enabled") as HTMLInputElement)?.checked || false,
+      caseSensitive:
+        (document.getElementById("non-chargeable-case-sensitive") as HTMLInputElement)?.checked ||
+        false,
+      chargeValue:
+        (document.getElementById("non-chargeable-charge-value") as HTMLInputElement)?.value || "N",
       subcategories: {
         clericalAdmin: {
-          enabled: (document.getElementById("clerical-admin-enabled") as HTMLInputElement)?.checked || false,
+          enabled:
+            (document.getElementById("clerical-admin-enabled") as HTMLInputElement)?.checked ||
+            false,
           keywords: (
             (document.getElementById("clerical-admin-keywords") as HTMLInputElement)?.value ||
             "filing,admin,administration,clerical,photocopying,scanning,organizing,office,paperwork,housekeeping"
@@ -5047,7 +2139,8 @@ function getCurrentRules(): RulesConfig {
             .filter((keyword) => keyword.length > 0),
         },
         ownError: {
-          enabled: (document.getElementById("own-error-enabled") as HTMLInputElement)?.checked || false,
+          enabled:
+            (document.getElementById("own-error-enabled") as HTMLInputElement)?.checked || false,
           keywords: (
             (document.getElementById("own-error-keywords") as HTMLInputElement)?.value ||
             "mistake,error,correction,fix,redo,revise,amend,rectify,wrong,incorrect"
@@ -5057,7 +2150,8 @@ function getCurrentRules(): RulesConfig {
             .filter((keyword) => keyword.length > 0),
         },
         research: {
-          enabled: (document.getElementById("research-enabled") as HTMLInputElement)?.checked || false,
+          enabled:
+            (document.getElementById("research-enabled") as HTMLInputElement)?.checked || false,
           keywords: (
             (document.getElementById("research-keywords") as HTMLInputElement)?.value ||
             "research,investigating,learning,studying,training,education,reading,background,familiarization"
@@ -5068,28 +2162,40 @@ function getCurrentRules(): RulesConfig {
         },
       },
     },
+    maxDailyHours: {
+      enabled:
+        (document.getElementById("max-daily-hours-enabled") as HTMLInputElement)?.checked || false,
+      maxHours: parseInt(
+        (document.getElementById("max-hours-limit") as HTMLInputElement)?.value || "10"
+      ),
+      chargeValue:
+        (document.getElementById("max-daily-hours-charge") as HTMLInputElement)?.value || "Q",
+      noteText:
+        (document.getElementById("max-daily-hours-note") as HTMLInputElement)?.value ||
+        "Max Daily Hours Exceeded",
+    },
   };
 }
 
 function loadRulesConfig(rules: RulesConfig) {
   // Load TimeFormat rule settings (with null checks for backward compatibility)
   const timeFormatRule = rules.timeFormat || getDefaultRules().timeFormat;
-  
+
   const timeFormatEnabledEl = document.getElementById("time-format-enabled") as HTMLInputElement;
   if (timeFormatEnabledEl) {
     timeFormatEnabledEl.checked = timeFormatRule.enabled;
   }
-  
+
   const timeFormatOutputEl = document.getElementById("time-format-output") as HTMLSelectElement;
   if (timeFormatOutputEl) {
     timeFormatOutputEl.value = timeFormatRule.outputFormat;
   }
-  
+
   const timeFormatRoundEl = document.getElementById("time-format-round") as HTMLInputElement;
   if (timeFormatRoundEl) {
     timeFormatRoundEl.checked = timeFormatRule.roundToSixMinutes;
   }
-  
+
   // Show/hide TimeFormat configuration based on enabled state
   const timeFormatConfigDiv = document.getElementById("time-format-content");
   if (timeFormatConfigDiv) {
@@ -5182,60 +2288,82 @@ function loadRulesConfig(rules: RulesConfig) {
   if (needsDetailConfigDiv) {
     needsDetailConfigDiv.style.display = needsDetailRule.enabled ? "block" : "none";
   }
-  
+
   // Load Travel rule settings (with null checks for backward compatibility)
   const travelRule = rules.travel || getDefaultRules().travel;
+
   const travelEnabledEl = document.getElementById("travel-enabled") as HTMLInputElement;
   if (travelEnabledEl) {
     travelEnabledEl.checked = travelRule.enabled;
   }
+
   const travelKeywordsEl = document.getElementById("travel-keywords") as HTMLInputElement;
   if (travelKeywordsEl) {
     travelKeywordsEl.value = travelRule.keywords.join(", ");
   }
-  const travelCaseSensitiveEl = document.getElementById("travel-case-sensitive") as HTMLInputElement;
+
+  const travelCaseSensitiveEl = document.getElementById(
+    "travel-case-sensitive"
+  ) as HTMLInputElement;
   if (travelCaseSensitiveEl) {
     travelCaseSensitiveEl.checked = travelRule.caseSensitive;
   }
+
   const travelChargeValueEl = document.getElementById("travel-charge-value") as HTMLInputElement;
   if (travelChargeValueEl) {
     travelChargeValueEl.value = travelRule.chargeValue;
   }
+
   const travelNoteTextEl = document.getElementById("travel-note-text") as HTMLInputElement;
   if (travelNoteTextEl) {
     travelNoteTextEl.value = travelRule.noteText;
   }
+
   // Show/hide Travel configuration based on enabled state
   const travelConfigDiv = document.getElementById("travel-content");
   if (travelConfigDiv) {
     travelConfigDiv.style.display = travelRule.enabled ? "block" : "none";
   }
-  
+
   // Load Non Chargeable rule settings (with null checks for backward compatibility)
   const nonChargeableRule = rules.nonChargeable || getDefaultRules().nonChargeable;
-  const nonChargeableEnabledEl = document.getElementById("non-chargeable-enabled") as HTMLInputElement;
+
+  const nonChargeableEnabledEl = document.getElementById(
+    "non-chargeable-enabled"
+  ) as HTMLInputElement;
   if (nonChargeableEnabledEl) {
     nonChargeableEnabledEl.checked = nonChargeableRule.enabled;
   }
-  const nonChargeableCaseSensitiveEl = document.getElementById("non-chargeable-case-sensitive") as HTMLInputElement;
+
+  const nonChargeableCaseSensitiveEl = document.getElementById(
+    "non-chargeable-case-sensitive"
+  ) as HTMLInputElement;
   if (nonChargeableCaseSensitiveEl) {
     nonChargeableCaseSensitiveEl.checked = nonChargeableRule.caseSensitive;
   }
-  const nonChargeableChargeValueEl = document.getElementById("non-chargeable-charge-value") as HTMLInputElement;
+
+  const nonChargeableChargeValueEl = document.getElementById(
+    "non-chargeable-charge-value"
+  ) as HTMLInputElement;
   if (nonChargeableChargeValueEl) {
     nonChargeableChargeValueEl.value = nonChargeableRule.chargeValue;
   }
-  
+
   // Load subcategory settings
-  const clericalAdminEnabledEl = document.getElementById("clerical-admin-enabled") as HTMLInputElement;
+  const clericalAdminEnabledEl = document.getElementById(
+    "clerical-admin-enabled"
+  ) as HTMLInputElement;
   if (clericalAdminEnabledEl) {
     clericalAdminEnabledEl.checked = nonChargeableRule.subcategories.clericalAdmin.enabled;
   }
-  const clericalAdminKeywordsEl = document.getElementById("clerical-admin-keywords") as HTMLInputElement;
+  const clericalAdminKeywordsEl = document.getElementById(
+    "clerical-admin-keywords"
+  ) as HTMLInputElement;
   if (clericalAdminKeywordsEl) {
-    clericalAdminKeywordsEl.value = nonChargeableRule.subcategories.clericalAdmin.keywords.join(", ");
+    clericalAdminKeywordsEl.value =
+      nonChargeableRule.subcategories.clericalAdmin.keywords.join(", ");
   }
-  
+
   const auditEnabledEl = document.getElementById("audit-enabled") as HTMLInputElement;
   if (auditEnabledEl) {
     auditEnabledEl.checked = nonChargeableRule.subcategories.audit.enabled;
@@ -5244,7 +2372,7 @@ function loadRulesConfig(rules: RulesConfig) {
   if (auditKeywordsEl) {
     auditKeywordsEl.value = nonChargeableRule.subcategories.audit.keywords.join(", ");
   }
-  
+
   const ownErrorEnabledEl = document.getElementById("own-error-enabled") as HTMLInputElement;
   if (ownErrorEnabledEl) {
     ownErrorEnabledEl.checked = nonChargeableRule.subcategories.ownError.enabled;
@@ -5253,7 +2381,7 @@ function loadRulesConfig(rules: RulesConfig) {
   if (ownErrorKeywordsEl) {
     ownErrorKeywordsEl.value = nonChargeableRule.subcategories.ownError.keywords.join(", ");
   }
-  
+
   const researchEnabledEl = document.getElementById("research-enabled") as HTMLInputElement;
   if (researchEnabledEl) {
     researchEnabledEl.checked = nonChargeableRule.subcategories.research.enabled;
@@ -5262,11 +2390,44 @@ function loadRulesConfig(rules: RulesConfig) {
   if (researchKeywordsEl) {
     researchKeywordsEl.value = nonChargeableRule.subcategories.research.keywords.join(", ");
   }
-  
+
   // Show/hide Non Chargeable configuration based on enabled state
   const nonChargeableConfigDiv = document.getElementById("non-chargeable-content");
   if (nonChargeableConfigDiv) {
     nonChargeableConfigDiv.style.display = nonChargeableRule.enabled ? "block" : "none";
+  }
+
+  // Load Max Daily Hours rule settings (with null checks for backward compatibility)
+  const maxDailyHoursRule = rules.maxDailyHours || getDefaultRules().maxDailyHours;
+
+  const maxDailyHoursEnabledEl = document.getElementById(
+    "max-daily-hours-enabled"
+  ) as HTMLInputElement;
+  if (maxDailyHoursEnabledEl) {
+    maxDailyHoursEnabledEl.checked = maxDailyHoursRule.enabled;
+  }
+
+  const maxHoursLimitEl = document.getElementById("max-hours-limit") as HTMLInputElement;
+  if (maxHoursLimitEl) {
+    maxHoursLimitEl.value = maxDailyHoursRule.maxHours.toString();
+  }
+
+  const maxDailyHoursChargeEl = document.getElementById(
+    "max-daily-hours-charge"
+  ) as HTMLInputElement;
+  if (maxDailyHoursChargeEl) {
+    maxDailyHoursChargeEl.value = maxDailyHoursRule.chargeValue;
+  }
+
+  const maxDailyHoursNoteEl = document.getElementById("max-daily-hours-note") as HTMLInputElement;
+  if (maxDailyHoursNoteEl) {
+    maxDailyHoursNoteEl.value = maxDailyHoursRule.noteText;
+  }
+
+  // Show/hide Max Daily Hours configuration based on enabled state
+  const maxDailyHoursConfigDiv = document.getElementById("max-daily-hours-content");
+  if (maxDailyHoursConfigDiv) {
+    maxDailyHoursConfigDiv.style.display = maxDailyHoursRule.enabled ? "block" : "none";
   }
 }
 
@@ -5310,6 +2471,9 @@ function saveRuleSettings() {
     if (currentRules.nonChargeable?.enabled) {
       enabledRules.push("Non Chargeable");
     }
+    if (currentRules.maxDailyHours?.enabled) {
+      enabledRules.push("Max Daily Hours");
+    }
 
     const ruleCount = enabledRules.length;
     const rulesList = enabledRules.length > 0 ? ` (${enabledRules.join(", ")})` : "";
@@ -5320,5 +2484,218 @@ function saveRuleSettings() {
     );
   } else {
     showMessage("Selected matter profile not found. Please create a new profile first.", "error");
+  }
+}
+
+// Max Daily Hours Rule implementation
+async function applyMaxDailyHoursRuleWithResult(): Promise<{
+  success: boolean;
+  updatedRows: number;
+  error?: string;
+}> {
+  try {
+    const selectedMatter = (document.getElementById("matter-select") as HTMLSelectElement).value;
+    if (!selectedMatter) {
+      return { success: false, updatedRows: 0, error: "No matter selected" };
+    }
+
+    const profiles = getMatterProfiles();
+    const currentProfile = profiles.find((p) => p.name === selectedMatter);
+
+    if (!currentProfile || !currentProfile.rules || !currentProfile.rules.maxDailyHours) {
+      return { success: false, updatedRows: 0, error: "Max Daily Hours rule not found in profile" };
+    }
+
+    const maxDailyHoursRule = currentProfile.rules.maxDailyHours;
+    if (!maxDailyHoursRule.enabled) {
+      return { success: false, updatedRows: 0, error: "Max Daily Hours rule is disabled" };
+    }
+
+    return await Excel.run(async (context) => {
+      const worksheet = context.workbook.worksheets.getActiveWorksheet();
+      const usedRange = worksheet.getUsedRange();
+      usedRange.load(["rowCount", "columnCount", "values"]);
+
+      await context.sync();
+
+      if (!usedRange || usedRange.rowCount < 2) {
+        return { success: true, updatedRows: 0 };
+      }
+
+      const values = usedRange.values;
+      const headers = values[0] as string[];
+
+      // Find required columns
+      const nameCol = headers.findIndex((h) => h && h.toLowerCase() === "name");
+      const dateCol = headers.findIndex((h) => h && h.toLowerCase() === "date");
+      const timeCol = headers.findIndex((h) => h && h.toLowerCase() === "amended time");
+      const originalTimeCol = headers.findIndex((h) => h && h.toLowerCase() === "original time");
+      const chargeCol = headers.findIndex((h) => h && h.toLowerCase() === "charge");
+      const notesCol = headers.findIndex((h) => h && h.toLowerCase() === "notes");
+
+      if (nameCol === -1) {
+        return { success: false, updatedRows: 0, error: "Name column not found" };
+      }
+      if (dateCol === -1) {
+        return { success: false, updatedRows: 0, error: "Date column not found" };
+      }
+      if (chargeCol === -1) {
+        return { success: false, updatedRows: 0, error: "Charge column not found" };
+      }
+      if (notesCol === -1) {
+        return { success: false, updatedRows: 0, error: "Notes column not found" };
+      }
+
+      // Use Amended Time if available, otherwise Original Time, otherwise Time
+      let actualTimeCol = timeCol;
+      if (actualTimeCol === -1) {
+        actualTimeCol = originalTimeCol;
+      }
+      if (actualTimeCol === -1) {
+        actualTimeCol = headers.findIndex((h) => h && h.toLowerCase() === "time");
+      }
+      if (actualTimeCol === -1) {
+        return { success: false, updatedRows: 0, error: "Time column not found" };
+      }
+
+      addDebugInfo(
+        `Max Daily Hours Rule: Using time column "${headers[actualTimeCol]}" at index ${actualTimeCol}`
+      );
+      addDebugInfo(`Max Daily Hours Rule: Max hours limit = ${maxDailyHoursRule.maxHours}`);
+
+      // Group entries by fee earner and date
+      const dailyHours = new Map<string, number>();
+      const rowsToCheck = new Map<string, number[]>();
+
+      // First pass: calculate total hours per fee earner per day
+      for (let i = 1; i < usedRange.rowCount; i++) {
+        const name = values[i][nameCol];
+        const date = values[i][dateCol];
+        const timeValue = values[i][actualTimeCol];
+
+        if (!name || !date || !timeValue) continue;
+
+        // Parse the time value
+        const hours = parseTimeToHours(timeValue);
+        if (hours === null) continue;
+
+        // Create key for fee earner + date
+        const key = `${name}|${date}`;
+
+        // Add hours to daily total
+        const currentTotal = dailyHours.get(key) || 0;
+        dailyHours.set(key, currentTotal + hours);
+
+        // Track which rows belong to this fee earner/date
+        if (!rowsToCheck.has(key)) {
+          rowsToCheck.set(key, []);
+        }
+        rowsToCheck.get(key)!.push(i);
+      }
+
+      // Second pass: mark rows where daily limit is exceeded
+      let updatedRows = 0;
+
+      for (const [key, totalHours] of dailyHours.entries()) {
+        if (totalHours > maxDailyHoursRule.maxHours) {
+          const [name, date] = key.split("|");
+          addDebugInfo(
+            `Max Daily Hours exceeded for ${name} on ${date}: ${totalHours.toFixed(2)} hours`
+          );
+
+          // Update all rows for this fee earner/date combination
+          const rows = rowsToCheck.get(key) || [];
+          for (const rowIndex of rows) {
+            const chargeCell = usedRange.getCell(rowIndex, chargeCol);
+            const notesCell = usedRange.getCell(rowIndex, notesCol);
+
+            // Set charge value
+            chargeCell.values = [[maxDailyHoursRule.chargeValue]];
+
+            // Update notes
+            const currentNotes = values[rowIndex][notesCol] || "";
+            const noteToAdd = maxDailyHoursRule.noteText;
+
+            if (!currentNotes.includes(noteToAdd)) {
+              const newNotes = currentNotes ? `${currentNotes}; ${noteToAdd}` : noteToAdd;
+              notesCell.values = [[newNotes]];
+            }
+
+            updatedRows++;
+          }
+        }
+      }
+
+      await context.sync();
+
+      addDebugInfo(`Max Daily Hours Rule: Updated ${updatedRows} rows`);
+      return { success: true, updatedRows };
+    });
+  } catch (error) {
+    console.error("Error in applyMaxDailyHoursRuleWithResult:", error);
+    return { success: false, updatedRows: 0, error: error.message };
+  }
+}
+
+// Helper function to parse time values to decimal hours
+function parseTimeToHours(timeValue: any): number | null {
+  if (typeof timeValue === "number") {
+    return timeValue;
+  }
+
+  if (typeof timeValue === "string") {
+    // Try to parse HH:MM format
+    const timeMatch = timeValue.match(/^(\d+):(\d+)$/);
+    if (timeMatch) {
+      const hours = parseInt(timeMatch[1]);
+      const minutes = parseInt(timeMatch[2]);
+      return hours + minutes / 60;
+    }
+
+    // Try to parse decimal format
+    const decimal = parseFloat(timeValue);
+    if (!isNaN(decimal)) {
+      return decimal;
+    }
+  }
+
+  return null;
+}
+
+// Undo Name Standardisation functionality
+async function undoNameStandardisation() {
+  try {
+    showMessage("Undo functionality is not yet implemented", "info");
+    console.log("undoNameStandardisation called - functionality to be implemented");
+  } catch (error) {
+    console.error("Error in undoNameStandardisation:", error);
+    showMessage("Error during undo operation", "error");
+  }
+}
+
+// Load nickname database functionality (stub)
+function loadNicknameDatabase(customNicknames: any) {
+  try {
+    console.log("loadNicknameDatabase called with:", customNicknames);
+    addDebugInfo(`Loading nickname database with ${Object.keys(customNicknames || {}).length} custom nicknames`);
+    // TODO: Implement nickname database loading functionality
+  } catch (error) {
+    console.error("Error in loadNicknameDatabase:", error);
+    addDebugInfo("Error loading nickname database");
+  }
+}
+
+// Get nickname database from form (stub)
+function getNicknameDatabaseFromForm(): any {
+  try {
+    console.log("getNicknameDatabaseFromForm called");
+    addDebugInfo("Getting nickname database from form - returning empty object for now");
+    // TODO: Implement nickname database form reading functionality
+    // This should read the nickname form data and return an object with nickname mappings
+    return {};
+  } catch (error) {
+    console.error("Error in getNicknameDatabaseFromForm:", error);
+    addDebugInfo("Error getting nickname database from form");
+    return {};
   }
 }

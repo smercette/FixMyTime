@@ -158,7 +158,7 @@
                 </div>
 
                 <!-- Permanent Debug Area -->
-                <div id="debug-area" style="display: none; margin-top: 10px; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9; font-family: monospace; font-size: 12px; white-space: pre-wrap;">
+                <div id="debug-area" style="display: block; margin-top: 10px; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9; font-family: monospace; font-size: 12px; white-space: pre-wrap;">
                   <strong>Debug Info:</strong>
                   <div id="debug-content"></div>
                 </div>
@@ -1108,6 +1108,103 @@
                               </p>
                             </div>
                           </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- Max Daily Hours Rule Section -->
+                  <div class="dropdown-section">
+                    <div class="dropdown-header" data-target="max-daily-hours-content">
+                      <div style="display: flex; align-items: center; gap: 8px">
+                        <input
+                          type="checkbox"
+                          id="max-daily-hours-enabled"
+                          class="ms-Checkbox-input"
+                        />
+                        <h3 class="ms-font-l" style="margin: 0">Max Daily Hours</h3>
+                      </div>
+                      <span class="dropdown-arrow">▼</span>
+                    </div>
+                    <div
+                      id="max-daily-hours-content"
+                      class="dropdown-content"
+                      style="display: none"
+                    >
+                      <p class="ms-font-m">
+                        Flag entries when a fee earner has worked more than a configurable number of hours in a 24-hour period.
+                      </p>
+                      <div
+                        style="
+                          margin-top: 15px;
+                          padding: 15px;
+                          background-color: #f9f9f9;
+                          border-radius: 4px;
+                        "
+                      >
+                        <div class="ms-Grid">
+                          <div class="ms-Grid-row">
+                            <div class="ms-Grid-col ms-sm6">
+                              <label class="ms-Label ms-font-s">Maximum Hours per Day:</label>
+                              <input
+                                id="max-hours-limit"
+                                type="number"
+                                class="ms-TextField-field"
+                                value="10"
+                                min="1"
+                                max="24"
+                                step="0.5"
+                                style="width: 100px; margin-top: 5px"
+                              />
+                              <p class="ms-font-xs" style="color: #666; margin-top: 5px">
+                                Hours limit per fee earner per day (supports decimal values)
+                              </p>
+                            </div>
+                            <div class="ms-Grid-col ms-sm6">
+                              <label class="ms-Label ms-font-s">Charge Column Value:</label>
+                              <input
+                                id="max-daily-hours-charge"
+                                type="text"
+                                class="ms-TextField-field"
+                                value="Q"
+                                style="width: 60px; margin-top: 5px"
+                              />
+                              <p class="ms-font-xs" style="color: #666; margin-top: 5px">
+                                Value to set when limit exceeded (typically "Q" for Query)
+                              </p>
+                            </div>
+                          </div>
+                          <div class="ms-Grid-row" style="margin-top: 15px">
+                            <div class="ms-Grid-col ms-sm8">
+                              <label class="ms-Label ms-font-s">Note Text:</label>
+                              <input
+                                id="max-daily-hours-note"
+                                type="text"
+                                class="ms-TextField-field"
+                                value="Max Daily Hours Exceeded"
+                                style="width: 100%; margin-top: 5px"
+                              />
+                              <p class="ms-font-xs" style="color: #666; margin-top: 5px">
+                                Note added to all rows for the fee earner/date when limit exceeded
+                              </p>
+                            </div>
+                            <div class="ms-Grid-col ms-sm4">
+                              <p class="ms-font-s" style="margin-top: 20px; color: #666;">
+                                <strong>Actions taken:</strong><br/>
+                                • Set Charge to specified value<br/>
+                                • Add note to Notes column<br/>
+                                • Applied to all rows for that day
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div style="margin-top: 15px; padding: 10px; background-color: #e6f3ff; border-radius: 4px;">
+                          <p class="ms-font-xs" style="margin: 0; color: #0066cc;">
+                            <strong>How it works:</strong> The rule calculates total hours per fee earner per day by summing time entries. 
+                            If the total exceeds the limit, ALL time entries for that fee earner on that date are flagged.
+                            Supports both HH:MM (e.g., "1:30") and decimal (e.g., "1.5") time formats.
+                          </p>
                         </div>
                       </div>
                     </div>
